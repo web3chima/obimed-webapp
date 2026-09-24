@@ -2,6 +2,8 @@ import type { CollectionConfig } from 'payload'
 
 import { APIError } from 'payload'
 
+import { notifyAccountApproved, notifyNewRegistration } from '@/notifications'
+
 import { isCustomerUser, isStaffUser, staffOnly, staffOnlyField } from '../../access/roles'
 
 // Manufacturer accounts for ordering, POs, invoices and the ledger. Separate from staff `users`.
@@ -30,11 +32,20 @@ export const Customers: CollectionConfig<'customers'> = {
     unlock: staffOnly,
   },
   admin: {
+    group: 'Sales',
     defaultColumns: ['company', 'name', 'email', 'approved', 'createdAt'],
     useAsTitle: 'company',
     description: 'Manufacturer accounts. Approve an account before the customer can log in.',
   },
   hooks: {
+    afterChange: [
+      async ({ doc, operation, previousDoc, req }) => {
+        if (operation === 'create') await notifyNewRegistration(req.payload, doc)
+        else if (doc.approved && !previousDoc?.approved)
+          await notifyAccountApproved(req.payload, doc)
+        return doc
+      },
+    ],
     beforeLogin: [
       ({ user }) => {
         if (!user?.approved) {

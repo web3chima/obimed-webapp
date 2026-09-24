@@ -16,8 +16,8 @@ export default async function QuotePage() {
         </p>
         <h1 className="text-3xl md:text-4xl font-bold leading-tight">Your quote request</h1>
         <p className="mt-4 mb-10 max-w-2xl text-lg">
-          Confirm quantities, add your details and send the request. Our team replies with pricing
-          and availability.
+          Confirm the number of bags and submit your request from your customer account. We price
+          it, then you enter your PO number to receive the invoice.
         </p>
         <QuoteRequest
           customer={

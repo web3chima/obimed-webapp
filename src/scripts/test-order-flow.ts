@@ -1,12 +1,27 @@
 // End-to-end check of customer accounts, quote requests, PO → invoice and the ledger, run
 // against a local dev server. Creates throwaway customers/orders and deletes them afterwards.
-// Run from the project root with the dev server running: bun src/scripts/test-order-flow.ts
+// Run from the project root with the dev server running (and its log in TEST_DEV_LOG to check
+// the emails it sends): TEST_DEV_LOG=dev.log bun src/scripts/test-order-flow.ts
+import { readFile } from 'fs/promises'
 import { getPayload } from 'payload'
 
 import config from '@payload-config'
 
 const BASE = process.env.TEST_BASE_URL || 'http://localhost:3000'
 const payload = await getPayload({ config })
+
+// Emails sent from this process (local API actions) are recorded here; emails sent by the dev
+// server (REST actions) are read from its log
+const sent: string[] = []
+const originalSendEmail = payload.sendEmail.bind(payload)
+payload.sendEmail = async (message) => {
+  sent.push(`${String(message.to)} | ${message.subject}`)
+  return originalSendEmail(message)
+}
+const devLogEmails = async () =>
+  process.env.TEST_DEV_LOG ? readFile(process.env.TEST_DEV_LOG, 'utf8').catch(() => '') : ''
+const emailed = async (subjectPart: string) =>
+  sent.some((line) => line.includes(subjectPart)) || (await devLogEmails()).includes(subjectPart)
 
 let failures = 0
 const check = (label: string, ok: boolean, detail = '') => {
@@ -57,19 +72,32 @@ try {
   const aId = reg.body?.doc?.id as number
   created.customers.push(aId)
   const fresh = await payload.findByID({ collection: 'customers', id: aId, overrideAccess: true })
-  check('registration cannot set approved/creditDays', fresh.approved === false && fresh.creditDays === 15)
+  check(
+    'registration cannot set approved/creditDays',
+    fresh.approved === false && fresh.creditDays === 15,
+  )
 
   const early = await login(a.email, a.password)
   check('unapproved customer cannot log in', early.status === 403, `status ${early.status}`)
 
   // 2. Approve, then log in
-  await payload.update({ collection: 'customers', id: aId, data: { approved: true }, overrideAccess: true })
+  await payload.update({
+    collection: 'customers',
+    id: aId,
+    data: { approved: true },
+    overrideAccess: true,
+  })
   const session = await login(a.email, a.password)
   check('approved customer can log in', session.status === 200 && Boolean(session.cookie))
   const cookie = session.cookie
 
   // 3. Customers cannot touch site content or write orders directly
-  const pages = await payload.find({ collection: 'pages', limit: 1, overrideAccess: true, depth: 0 })
+  const pages = await payload.find({
+    collection: 'pages',
+    limit: 1,
+    overrideAccess: true,
+    depth: 0,
+  })
   const pageId = pages.docs[0]?.id
   const editPage = await api(`/api/pages/${pageId}`, {
     method: 'PATCH',
@@ -88,7 +116,11 @@ try {
     body: JSON.stringify({ customer: aId, items: [] }),
     cookie,
   })
-  check('customer cannot create orders directly', directOrder.status === 403, `status ${directOrder.status}`)
+  check(
+    'customer cannot create orders directly',
+    directOrder.status === 403,
+    `status ${directOrder.status}`,
+  )
   const staffList = await api('/api/users', { cookie })
   check('customer cannot list staff users', staffList.status === 403, `status ${staffList.status}`)
 
@@ -104,13 +136,24 @@ try {
     }),
     cookie,
   })
-  check('submit quote request', request.status === 201, `status ${request.status} ${request.body?.error || ''}`)
+  check(
+    'submit quote request',
+    request.status === 201,
+    `status ${request.status} ${request.body?.error || ''}`,
+  )
   const orderId = request.body?.id as number
   created.orders.push(orderId)
-  check('order number assigned', /^RFQ-\d{4}-\d{4}$/.test(request.body?.orderNumber || ''), request.body?.orderNumber)
+  check(
+    'order number assigned',
+    /^RFQ-\d{4}-\d{4}$/.test(request.body?.orderNumber || ''),
+    request.body?.orderNumber,
+  )
 
   const stored = await payload.findByID({ collection: 'orders', id: orderId, overrideAccess: true })
-  check('customer cannot set prices when requesting', stored.items.every((i) => i.unitPrice == null))
+  check(
+    'customer cannot set prices when requesting',
+    stored.items.every((i) => i.unitPrice == null),
+  )
 
   const earlyPO = await api(`/api/orders/${orderId}/po`, {
     method: 'POST',
@@ -136,7 +179,9 @@ try {
   check(
     'prices hidden from customer before PO',
     hidden.status === 200 &&
-      hiddenItems.every((i: Record<string, unknown>) => !('unitPrice' in i) && !('lineTotal' in i)) &&
+      hiddenItems.every(
+        (i: Record<string, unknown>) => !('unitPrice' in i) && !('lineTotal' in i),
+      ) &&
       !('total' in hidden.body),
   )
 
@@ -152,13 +197,21 @@ try {
   })
   const sessionB = await login(b.email, b.password)
   const peek = await api(`/api/orders/${orderId}`, { cookie: sessionB.cookie })
-  check("other customer cannot read someone else's order", peek.status === 404 || peek.status === 403, `status ${peek.status}`)
+  check(
+    "other customer cannot read someone else's order",
+    peek.status === 404 || peek.status === 403,
+    `status ${peek.status}`,
+  )
   const hijack = await api(`/api/orders/${orderId}/po`, {
     method: 'POST',
     body: JSON.stringify({ poNumber: 'PO-HIJACK' }),
     cookie: sessionB.cookie,
   })
-  check("other customer cannot submit a PO on someone else's order", hijack.status === 404, `status ${hijack.status}`)
+  check(
+    "other customer cannot submit a PO on someone else's order",
+    hijack.status === 404,
+    `status ${hijack.status}`,
+  )
 
   // 7. Owner submits PO → invoice issued, prices revealed, ledger entry recorded
   const po = await api(`/api/orders/${orderId}/po`, {
@@ -167,7 +220,11 @@ try {
     cookie,
   })
   check('owner submits PO', po.status === 200, `status ${po.status} ${po.body?.error || ''}`)
-  check('invoice number issued', /^INV-\d{4}-\d{4}$/.test(po.body?.invoiceNumber || ''), po.body?.invoiceNumber)
+  check(
+    'invoice number issued',
+    /^INV-\d{4}-\d{4}$/.test(po.body?.invoiceNumber || ''),
+    po.body?.invoiceNumber,
+  )
 
   const shown = await api(`/api/orders/${orderId}`, { cookie })
   check(
@@ -175,7 +232,11 @@ try {
     shown.body?.total === priced.total && shown.body?.items?.[0]?.unitPrice === 15000,
   )
   const due = new Date(shown.body?.dueDate).getTime() - new Date(shown.body?.invoiceDate).getTime()
-  check('due date is 15 days after invoice', Math.round(due / 86_400_000) === 15, `${due / 86_400_000} days`)
+  check(
+    'due date is 15 days after invoice',
+    Math.round(due / 86_400_000) === 15,
+    `${due / 86_400_000} days`,
+  )
   check('status is invoiced', shown.body?.status === 'invoiced', shown.body?.status)
 
   const again = await api(`/api/orders/${orderId}/po`, {
@@ -192,13 +253,79 @@ try {
   })
   check(
     'one ledger entry for the invoice',
-    ledger.totalDocs === 1 && ledger.docs[0]?.amount === priced.total && ledger.docs[0]?.type === 'invoice',
+    ledger.totalDocs === 1 &&
+      ledger.docs[0]?.amount === priced.total &&
+      ledger.docs[0]?.type === 'invoice',
     `${ledger.totalDocs} entries`,
   )
   const myLedger = await api('/api/ledger-entries', { cookie })
   check('customer can read own ledger', myLedger.status === 200 && myLedger.body?.totalDocs === 1)
   const otherLedger = await api('/api/ledger-entries', { cookie: sessionB.cookie })
-  check("other customer sees none of it", otherLedger.body?.totalDocs === 0, String(otherLedger.body?.totalDocs))
+  check(
+    'other customer sees none of it',
+    otherLedger.body?.totalDocs === 0,
+    String(otherLedger.body?.totalDocs),
+  )
+
+  // 8. Delivery, part payment, then full payment → order marked paid automatically
+  await payload.update({
+    collection: 'orders',
+    id: orderId,
+    data: { status: 'delivered' },
+    overrideAccess: true,
+  })
+  await payload.create({
+    collection: 'ledger-entries',
+    data: {
+      customer: aId,
+      order: orderId,
+      type: 'payment',
+      date: new Date().toISOString(),
+      amount: 100000,
+      reference: 'TRF-1',
+    },
+    overrideAccess: true,
+  })
+  const partPaid = await payload.findByID({
+    collection: 'orders',
+    id: orderId,
+    overrideAccess: true,
+  })
+  check('part payment keeps order open', partPaid.status === 'delivered', partPaid.status)
+  await payload.create({
+    collection: 'ledger-entries',
+    data: {
+      customer: aId,
+      order: orderId,
+      type: 'payment',
+      date: new Date().toISOString(),
+      amount: priced.total! - 100000,
+      reference: 'TRF-2',
+    },
+    overrideAccess: true,
+  })
+  const paid = await payload.findByID({ collection: 'orders', id: orderId, overrideAccess: true })
+  check('full payment marks order paid', paid.status === 'paid', paid.status)
+
+  // 9. Notifications at every step (wait briefly for the dev server's log to flush)
+  await new Promise((resolve) => setTimeout(resolve, 1500))
+  const invoiceNumber = po.body?.invoiceNumber as string
+  const expected: [string, string][] = [
+    ['staff told about new registration', `New customer registration: ${a.company}`],
+    ['customer told account approved', 'Your Obimed account is approved'],
+    ['staff told about quote request', `New quote request ${request.body?.orderNumber}`],
+    [
+      'customer told request received',
+      `We received your quote request ${request.body?.orderNumber}`,
+    ],
+    ['customer told order priced', `Your order ${request.body?.orderNumber} is priced`],
+    ['customer sent invoice', `Invoice ${invoiceNumber} for PO PO-12345`],
+    ['staff told PO received', `PO received: ${invoiceNumber}`],
+    ['customer told delivered', `Order ${request.body?.orderNumber} delivered`],
+    ['customer sent payment receipt', 'Payment received'],
+    ['customer told paid in full', `Invoice ${invoiceNumber} paid in full`],
+  ]
+  for (const [label, subject] of expected) check(`email: ${label}`, await emailed(subject), subject)
 } finally {
   // Clean up everything this test created
   for (const id of created.orders.filter(Boolean)) {

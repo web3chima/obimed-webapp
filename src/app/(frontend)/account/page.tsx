@@ -7,6 +7,7 @@ import { getPayload } from 'payload'
 import React from 'react'
 import { ChevronRightIcon, FileTextIcon } from 'lucide-react'
 
+import { customerBalance } from '@/collections/LedgerEntries/balance'
 import { LogoutButton } from '@/components/Account/AuthForms'
 import { OrderStatus } from '@/components/Account/OrderStatus'
 import { Button } from '@/components/ui/button'
@@ -29,6 +30,7 @@ export default async function AccountPage() {
   })
 
   const needsPO = orders.docs.filter((order) => order.status === 'priced').length
+  const balance = await customerBalance(payload, customer.id)
 
   return (
     <div className="container pt-8 pb-24">
@@ -47,6 +49,21 @@ export default async function AccountPage() {
             <Link href="/products">New quote request</Link>
           </Button>
           <LogoutButton />
+        </div>
+      </div>
+
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <p className="text-sm text-muted-foreground">Outstanding balance</p>
+          <p className="mt-1 font-heading text-2xl font-bold text-heading">
+            {formatNaira(balance)}
+          </p>
+        </div>
+        <div className="rounded-2xl border border-border bg-card p-5">
+          <p className="text-sm text-muted-foreground">Payment terms</p>
+          <p className="mt-1 font-heading text-2xl font-bold text-heading">
+            {customer.creditDays ?? 15} days
+          </p>
         </div>
       </div>
 

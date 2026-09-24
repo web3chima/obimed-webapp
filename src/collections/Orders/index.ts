@@ -5,6 +5,7 @@ import {
   assignOrderNumber,
   calculateTotals,
   issueInvoiceOnPO,
+  notifyOrderChanges,
   recordInvoiceInLedger,
 } from './hooks'
 import { requestQuoteEndpoint, submitPOEndpoint } from './endpoints'
@@ -36,6 +37,7 @@ export const Orders: CollectionConfig<'orders'> = {
     delete: staffOnly,
   },
   admin: {
+    group: 'Sales',
     defaultColumns: ['orderNumber', 'customer', 'status', 'total', 'updatedAt'],
     useAsTitle: 'orderNumber',
     description:
@@ -45,7 +47,7 @@ export const Orders: CollectionConfig<'orders'> = {
   endpoints: [requestQuoteEndpoint, submitPOEndpoint],
   hooks: {
     beforeChange: [assignOrderNumber, calculateTotals, issueInvoiceOnPO],
-    afterChange: [recordInvoiceInLedger],
+    afterChange: [recordInvoiceInLedger, notifyOrderChanges],
   },
   fields: [
     {

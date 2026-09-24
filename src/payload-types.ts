@@ -2472,6 +2472,8 @@ export interface Footer {
   createdAt?: string | null;
 }
 /**
+ * Bank details printed on invoices, and who at Obimed receives order notifications.
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "invoice-settings".
  */
@@ -2480,6 +2482,10 @@ export interface InvoiceSetting {
   bankName?: string | null;
   accountName?: string | null;
   accountNumber?: string | null;
+  /**
+   * Who at Obimed is emailed about new registrations, quote requests and POs. Separate several addresses with commas.
+   */
+  notifyEmails?: string | null;
   notes?: string | null;
   updatedAt?: string | null;
   createdAt?: string | null;
@@ -2538,6 +2544,7 @@ export interface InvoiceSettingsSelect<T extends boolean = true> {
   bankName?: T;
   accountName?: T;
   accountNumber?: T;
+  notifyEmails?: T;
   notes?: T;
   updatedAt?: T;
   createdAt?: T;

@@ -5,7 +5,12 @@ import { isCustomerUser, isStaffUser, staffOnly } from '../access/roles'
 // Bank details and notes printed on every invoice
 export const InvoiceSettings: GlobalConfig = {
   slug: 'invoice-settings',
-  label: 'Invoice settings',
+  label: 'Order & invoice settings',
+  admin: {
+    group: 'Sales',
+    description:
+      'Bank details printed on invoices, and who at Obimed receives order notifications.',
+  },
   access: {
     read: ({ req: { user } }) => isStaffUser(user) || isCustomerUser(user),
     update: staffOnly,
@@ -18,6 +23,15 @@ export const InvoiceSettings: GlobalConfig = {
         { name: 'accountName', type: 'text' },
         { name: 'accountNumber', type: 'text' },
       ],
+    },
+    {
+      name: 'notifyEmails',
+      label: 'Staff notification emails',
+      type: 'text',
+      admin: {
+        description:
+          'Who at Obimed is emailed about new registrations, quote requests and POs. Separate several addresses with commas.',
+      },
     },
     {
       name: 'notes',

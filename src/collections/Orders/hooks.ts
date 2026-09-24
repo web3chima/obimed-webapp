@@ -2,6 +2,13 @@ import type { CollectionAfterChangeHook, CollectionBeforeChangeHook, Payload } f
 
 import type { Order } from '@/payload-types'
 
+import {
+  notifyInvoiceIssued,
+  notifyOrderPriced,
+  notifyOrderSubmitted,
+  notifyStatusChange,
+} from '@/notifications'
+
 type Item = NonNullable<Order['items']>[number]
 
 const isPriced = (item: Item) => typeof item.unitPrice === 'number' && item.unitPrice >= 0
@@ -121,4 +128,23 @@ export const assignOrderNumber: CollectionBeforeChangeHook<Order> = async ({
     data.orderNumber = await nextNumber(req.payload, 'orderNumber', 'RFQ')
   }
   return data
+}
+
+// Email the customer and/or staff at each step of the order's life
+export const notifyOrderChanges: CollectionAfterChangeHook<Order> = async ({
+  doc,
+  operation,
+  previousDoc,
+  req,
+}) => {
+  const { payload } = req
+  if (operation === 'create') {
+    await notifyOrderSubmitted(payload, doc)
+  } else if (doc.invoiceNumber && !previousDoc?.invoiceNumber) {
+    await notifyInvoiceIssued(payload, doc)
+  } else if (doc.status !== previousDoc?.status) {
+    if (doc.status === 'priced') await notifyOrderPriced(payload, doc)
+    else await notifyStatusChange(payload, doc)
+  }
+  return doc
 }

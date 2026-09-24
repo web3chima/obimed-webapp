@@ -6,6 +6,7 @@ import React from 'react'
 import { ChevronLeftIcon, FileTextIcon } from 'lucide-react'
 
 import { OrderStatus } from '@/components/Account/OrderStatus'
+import { OrderTimeline } from '@/components/Account/OrderTimeline'
 import { POForm } from '@/components/Account/POForm'
 import { Button } from '@/components/ui/button'
 import { formatDate, formatNaira } from '@/utilities/format'
@@ -42,6 +43,10 @@ export default async function OrderPage({ params }: Args) {
           </p>
         </div>
         <OrderStatus status={order.status} />
+      </div>
+
+      <div className="mb-8">
+        <OrderTimeline status={order.status} />
       </div>
 
       {order.status === 'submitted' && (

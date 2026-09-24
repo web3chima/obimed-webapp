@@ -1,6 +1,7 @@
 import type { CollectionConfig } from 'payload'
 
 import { staffOnly, staffOrOwnCustomer } from '../../access/roles'
+import { settleOrder } from './hooks'
 
 // Customer account ledger. Invoices are added automatically when a customer submits a PO;
 // staff record payments and credit notes here. Balance = invoices − payments − credit notes.
@@ -14,12 +15,16 @@ export const LedgerEntries: CollectionConfig<'ledger-entries'> = {
     delete: staffOnly,
   },
   admin: {
+    group: 'Sales',
     defaultColumns: ['date', 'customer', 'type', 'amount', 'reference'],
     useAsTitle: 'reference',
     description:
       'Invoices appear here automatically. Add a Payment when a customer pays, or a Credit note to reduce what they owe.',
   },
   defaultSort: '-date',
+  hooks: {
+    afterChange: [settleOrder],
+  },
   fields: [
     {
       type: 'row',

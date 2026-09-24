@@ -1,4 +1,5 @@
 import { postgresAdapter } from '@payloadcms/db-postgres'
+import { nodemailerAdapter } from '@payloadcms/email-nodemailer'
 import sharp from 'sharp'
 import path from 'path'
 import { buildConfig, PayloadRequest } from 'payload'
@@ -22,6 +23,7 @@ import { InvoiceSettings } from './InvoiceSettings/config'
 import { plugins } from './plugins'
 import { defaultLexical } from '@/fields/defaultLexical'
 import { getServerSideURL } from './utilities/getURL'
+import { siteConfig } from './utilities/siteConfig'
 
 // node-postgres treats sslmode=require as full certificate verification, which Supabase's pooler
 // certificate fails; uselibpqcompat restores the usual "encrypt, don't verify" meaning
@@ -113,6 +115,21 @@ export default buildConfig({
   ],
   cors: [getServerSideURL()].filter(Boolean),
   globals: [Header, Footer, InvoiceSettings],
+  // Order notifications are emailed once SMTP_* is set (e.g. in Vercel); without it Payload
+  // writes each email to the server log instead
+  email: process.env.SMTP_HOST
+    ? nodemailerAdapter({
+        defaultFromAddress: process.env.SMTP_FROM || siteConfig.email,
+        defaultFromName: siteConfig.name,
+        skipVerify: true,
+        transportOptions: {
+          host: process.env.SMTP_HOST,
+          port: Number(process.env.SMTP_PORT) || 587,
+          secure: Number(process.env.SMTP_PORT) === 465,
+          auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+        },
+      })
+    : undefined,
   plugins,
   onInit: async (payload) => {
     guardCustomerAccess(payload)

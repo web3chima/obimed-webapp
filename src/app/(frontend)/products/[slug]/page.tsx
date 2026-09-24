@@ -59,7 +59,7 @@ export default async function ProductPage({ params: paramsPromise }: Args) {
   const related = await getRelated(product.category, product.id)
 
   const whatsappText = encodeURIComponent(
-    `Hello Obimed, I would like a quote for ${product.title}.`,
+    `Hello Obimed, I have a question about ${product.title}.`,
   )
 
   return (
