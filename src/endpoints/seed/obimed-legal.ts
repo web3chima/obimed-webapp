@@ -92,7 +92,7 @@ export const obimedQuality: RequiredDataFromCollectionSlug<'pages'> = {
 
         heading('h2', 'Governance'),
         paragraph(
-          "The policy is owned by OBIMED's Directors, overseen by our parent company, Jenet 'N' Pharmaceuticals, and reviewed at least once a year or whenever regulations change.",
+          "The policy is owned by OBIMED's Directors, overseen by our parent company, KBC Chemical (Janet N Pharmaceutical), and reviewed at least once a year or whenever regulations change.",
         ),
 
         heading('h2', 'Questions'),

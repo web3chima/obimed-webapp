@@ -31,7 +31,7 @@ export const obimedCompany: RequiredDataFromCollectionSlug<'pages'> = {
       eyebrow: 'Who we are',
       heading: 'Sourcing excellence, backed by 30+ years of group experience',
       body: [
-        "OBIMED Pharmaceuticals is a trusted pharmaceutical sourcing and supply chain support company, operating as a group with our parent company, Jenet 'N' Pharmaceuticals, which brings over 30 years of industry experience in chemical raw materials marketing, sourcing, procurement operations and distribution to the food and pharmaceutical industries in the African market.",
+        "OBIMED Pharmaceuticals is a trusted pharmaceutical sourcing and supply chain support company, operating as a group with our parent company, KBC Chemical (Janet N Pharmaceutical), which brings over 30 years of industry experience in chemical raw materials marketing, sourcing, procurement operations and distribution to the food and pharmaceutical industries in the African market.",
         'We specialize in the sourcing and supply chain of Active Pharmaceutical Ingredients (APIs), food-grade raw materials, procurement solutions, distribution support and Local Purchase Order (LPO) financing for manufacturers in the pharmaceutical and food industries in Africa.',
         'At OBIMED Pharmaceuticals, we are committed to supporting uninterrupted manufacturing by ensuring timely access to quality raw materials through an efficient and reliable supply chain.',
       ].join('\n\n'),
@@ -153,6 +153,6 @@ export const obimedCompany: RequiredDataFromCollectionSlug<'pages'> = {
   meta: {
     title: 'About OBIMED Pharmaceuticals',
     description:
-      'OBIMED Pharmaceuticals supplies APIs, excipients and food-grade raw materials to manufacturers in Africa, with procurement support and LPO financing. Part of the Jenet ‘N’ Pharmaceuticals group.',
+      'OBIMED Pharmaceuticals supplies APIs, excipients and food-grade raw materials to manufacturers in Africa, with procurement support and LPO financing. Part of the KBC Chemical (Janet N Pharmaceutical) group.',
   },
 }
