@@ -17,9 +17,22 @@ import { plugins } from './plugins'
 import { defaultLexical } from '@/fields/defaultLexical'
 import { getServerSideURL } from './utilities/getURL'
 
+// node-postgres treats sslmode=require as full certificate verification, which Supabase's pooler
+// certificate fails; uselibpqcompat restores the usual "encrypt, don't verify" meaning
+function withLibpqSSL(url: string | undefined) {
+  if (!url || !/[?&]sslmode=require\b/.test(url) || /[?&]uselibpqcompat=/.test(url)) return url
+  return `${url}&uselibpqcompat=true`
+}
+
+// The Vercel Supabase integration provides POSTGRES_URL (transaction pooler) instead of DATABASE_URL
+const databaseURL = withLibpqSSL(process.env.DATABASE_URL || process.env.POSTGRES_URL)
+
 // Fail early with a clear message instead of an opaque build error (e.g. on Vercel, where
 // .env is not uploaded and these must be set under Settings → Environment Variables)
-const missingEnv = ['PAYLOAD_SECRET', 'DATABASE_URL'].filter((name) => !process.env[name])
+const missingEnv = [
+  !process.env.PAYLOAD_SECRET && 'PAYLOAD_SECRET',
+  !databaseURL && 'DATABASE_URL (or POSTGRES_URL)',
+].filter(Boolean)
 if (missingEnv.length > 0) {
   throw new Error(
     `Missing environment variables: ${missingEnv.join(', ')}. Set them in .env locally, or in Vercel under Settings → Environment Variables (see .env.example).`,
@@ -74,7 +87,7 @@ export default buildConfig({
   editor: defaultLexical,
   db: postgresAdapter({
     pool: {
-      connectionString: process.env.DATABASE_URL || '',
+      connectionString: databaseURL,
       // Supabase's session pooler allows 15 connections in total; each process (dev server,
       // build workers, seed scripts) opens its own pool, so keep them small
       max: Number(process.env.DATABASE_POOL_MAX) || 5,
