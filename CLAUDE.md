@@ -12,3 +12,18 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## Deploy Configuration (configured by /setup-deploy)
+- Platform: Vercel (team web3chimas-projects, project obimed-webapp, GitHub-connected: web3chima/obimed-webapp)
+- Production URL: https://obimed-webapp-web3chimas-projects.vercel.app
+- Deploy workflow: auto-deploy on push to main (direct pushes, no pull requests)
+- Deploy status command: `bun --bun ~/.bun/bin/vercel ls obimed-webapp --scope web3chimas-projects` (Vercel CLI 60 via Bun; no Node on this Mac), logs via `vercel inspect <url> --logs`
+- Merge method: none (direct push to main)
+- Project type: web app (Payload CMS + Next.js)
+- Post-deploy health check: https://obimed-webapp-web3chimas-projects.vercel.app/ and https://obimed-webapp-web3chimas-projects.vercel.app/products return 200
+
+### Custom deploy hooks
+- Pre-merge: `bunx tsc --noEmit` (and `bunx next build` for larger changes)
+- Deploy trigger: automatic on push to main
+- Deploy status: poll production URL
+- Health check: https://obimed-webapp-web3chimas-projects.vercel.app/
