@@ -20,7 +20,7 @@ export async function Footer() {
   const navItems = footerData?.navItems || []
 
   return (
-    <footer className="mt-auto bg-brand-purple dark:bg-card text-white">
+    <footer className="mt-auto bg-brand-purple dark:bg-card text-white print:hidden">
       <div className="h-1.5 bg-brand-green" />
       <div className="container py-12 grid gap-10 md:grid-cols-2 lg:grid-cols-[1.4fr_1fr_1.4fr]">
         <div className="flex flex-col gap-4">

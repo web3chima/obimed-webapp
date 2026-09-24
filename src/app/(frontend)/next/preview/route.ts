@@ -47,7 +47,8 @@ export async function GET(req: NextRequest): Promise<Response> {
 
   const draft = await draftMode()
 
-  if (!user) {
+  // Draft previews are for staff; customers can log in too
+  if (user?.collection !== 'users') {
     draft.disable()
     return new Response('You are not allowed to preview this page', { status: 403 })
   }

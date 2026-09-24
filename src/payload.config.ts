@@ -2,17 +2,23 @@ import { postgresAdapter } from '@payloadcms/db-postgres'
 import sharp from 'sharp'
 import path from 'path'
 import { buildConfig, PayloadRequest } from 'payload'
+
+import { guardCustomerAccess } from './access/customerGuard'
 import { fileURLToPath } from 'url'
 
 import { Categories } from './collections/Categories'
+import { Customers } from './collections/Customers'
 import { Jobs } from './collections/Jobs'
+import { LedgerEntries } from './collections/LedgerEntries'
 import { Media } from './collections/Media'
+import { Orders } from './collections/Orders'
 import { Pages } from './collections/Pages'
 import { Posts } from './collections/Posts'
 import { Products } from './collections/Products'
 import { Users } from './collections/Users'
 import { Footer } from './Footer/config'
 import { Header } from './Header/config'
+import { InvoiceSettings } from './InvoiceSettings/config'
 import { plugins } from './plugins'
 import { defaultLexical } from '@/fields/defaultLexical'
 import { getServerSideURL } from './utilities/getURL'
@@ -93,10 +99,24 @@ export default buildConfig({
       max: Number(process.env.DATABASE_POOL_MAX) || 5,
     },
   }),
-  collections: [Pages, Products, Jobs, Posts, Media, Categories, Users],
+  collections: [
+    Pages,
+    Products,
+    Orders,
+    LedgerEntries,
+    Customers,
+    Jobs,
+    Posts,
+    Media,
+    Categories,
+    Users,
+  ],
   cors: [getServerSideURL()].filter(Boolean),
-  globals: [Header, Footer],
+  globals: [Header, Footer, InvoiceSettings],
   plugins,
+  onInit: async (payload) => {
+    guardCustomerAccess(payload)
+  },
   secret: process.env.PAYLOAD_SECRET,
   sharp,
   typescript: {
@@ -106,7 +126,7 @@ export default buildConfig({
     access: {
       run: ({ req }: { req: PayloadRequest }): boolean => {
         // Allow logged in users to execute this endpoint (default)
-        if (req.user) return true
+        if (req.user?.collection === 'users') return true
 
         const secret = process.env.CRON_SECRET
         if (!secret) return false

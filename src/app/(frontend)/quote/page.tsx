@@ -3,8 +3,11 @@ import type { Metadata } from 'next'
 import React from 'react'
 
 import { QuoteRequest } from '@/components/Products/QuoteRequest'
+import { getCustomer } from '@/utilities/getCustomer'
 
-export default function QuotePage() {
+export default async function QuotePage() {
+  const customer = await getCustomer()
+
   return (
     <div className="pt-8 pb-24">
       <div className="container">
@@ -16,7 +19,13 @@ export default function QuotePage() {
           Confirm quantities, add your details and send the request. Our team replies with pricing
           and availability.
         </p>
-        <QuoteRequest />
+        <QuoteRequest
+          customer={
+            customer
+              ? { company: customer.company, name: customer.name, address: customer.address }
+              : null
+          }
+        />
       </div>
     </div>
   )

@@ -9,6 +9,7 @@ import type { Job } from '@/payload-types'
 
 import { PageBanner } from '@/components/PageBanner'
 import { Button } from '@/components/ui/button'
+import { formatDate } from '@/utilities/format'
 import { siteConfig } from '@/utilities/siteConfig'
 
 export const dynamic = 'force-static'
@@ -102,17 +103,7 @@ const JobCard: React.FC<{ job: Job }> = ({ job }) => (
             </span>
           )}
           {job.employmentType && <span>{employmentLabels[job.employmentType]}</span>}
-          {job.closingDate && (
-            <span>
-              Closes{' '}
-              {new Date(job.closingDate).toLocaleDateString('en-GB', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-                timeZone: 'Africa/Lagos',
-              })}
-            </span>
-          )}
+          {job.closingDate && <span>Closes {formatDate(job.closingDate)}</span>}
         </p>
       </div>
       <span className="font-heading text-sm font-semibold text-primary">

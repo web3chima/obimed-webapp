@@ -17,7 +17,7 @@ export const QuoteBar: React.FC = () => {
   const names = items.map((item) => item.title).join(', ')
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-40 p-3 md:p-4 pointer-events-none animate-in slide-in-from-bottom-8 fade-in duration-300">
+    <div className="fixed inset-x-0 bottom-0 z-40 p-3 md:p-4 pointer-events-none print:hidden animate-in slide-in-from-bottom-8 fade-in duration-300">
       <div className="container pointer-events-auto">
         <div className="flex items-center gap-4 rounded-xl bg-brand-purple text-white shadow-2xl px-4 py-3 md:px-6">
           <span className="relative hidden sm:inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/10">

@@ -12,7 +12,8 @@ export async function POST(): Promise<Response> {
   // Authenticate by passing request headers
   const { user } = await payload.auth({ headers: requestHeaders })
 
-  if (!user) {
+  // Staff only: customers can log in too, and seeding replaces all site content
+  if (user?.collection !== 'users') {
     return new Response('Action forbidden.', { status: 403 })
   }
 

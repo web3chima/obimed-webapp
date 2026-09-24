@@ -5,20 +5,13 @@ import type { JSXConvertersFunction } from '@payloadcms/richtext-lexical/react'
 import type { LegalDocumentBlock as LegalDocumentBlockProps } from '@/payload-types'
 
 import RichText, { jsxConverters, type NodeTypes } from '@/components/RichText'
+import { formatDate } from '@/utilities/format'
 import { toKebabCase } from '@/utilities/toKebabCase'
 
 type LexicalNode = { type?: string; tag?: string; text?: string; children?: LexicalNode[] }
 
 const plainText = (node: LexicalNode): string =>
   node.text ?? (node.children || []).map(plainText).join('')
-
-const formatDate = (value: string) =>
-  new Date(value).toLocaleDateString('en-GB', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'Africa/Lagos',
-  })
 
 const anchorFor = (text: string) => toKebabCase(text.replace(/[^\w\s-]/g, '').trim())
 

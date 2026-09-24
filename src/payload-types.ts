@@ -63,12 +63,16 @@ export type SupportedTimezones =
 
 export interface Config {
   auth: {
+    customers: CustomerAuthOperations;
     users: UserAuthOperations;
   };
   blocks: {};
   collections: {
     pages: Page;
     products: Product;
+    orders: Order;
+    'ledger-entries': LedgerEntry;
+    customers: Customer;
     jobs: Job;
     posts: Post;
     media: Media;
@@ -93,6 +97,9 @@ export interface Config {
   collectionsSelect: {
     pages: PagesSelect<false> | PagesSelect<true>;
     products: ProductsSelect<false> | ProductsSelect<true>;
+    orders: OrdersSelect<false> | OrdersSelect<true>;
+    'ledger-entries': LedgerEntriesSelect<false> | LedgerEntriesSelect<true>;
+    customers: CustomersSelect<false> | CustomersSelect<true>;
     jobs: JobsSelect<false> | JobsSelect<true>;
     posts: PostsSelect<false> | PostsSelect<true>;
     media: MediaSelect<false> | MediaSelect<true>;
@@ -116,16 +123,18 @@ export interface Config {
   globals: {
     header: Header;
     footer: Footer;
+    'invoice-settings': InvoiceSetting;
   };
   globalsSelect: {
     header: HeaderSelect<false> | HeaderSelect<true>;
     footer: FooterSelect<false> | FooterSelect<true>;
+    'invoice-settings': InvoiceSettingsSelect<false> | InvoiceSettingsSelect<true>;
   };
   locale: null;
   widgets: {
     collections: CollectionsWidget;
   };
-  user: User;
+  user: Customer | User;
   jobs: {
     tasks: {
       schedulePublish: TaskSchedulePublish;
@@ -135,6 +144,24 @@ export interface Config {
       };
     };
     workflows: unknown;
+  };
+}
+export interface CustomerAuthOperations {
+  forgotPassword: {
+    email: string;
+    password: string;
+  };
+  login: {
+    email: string;
+    password: string;
+  };
+  registerFirstUser: {
+    email: string;
+    password: string;
+  };
+  unlock: {
+    email: string;
+    password: string;
   };
 }
 export interface UserAuthOperations {
@@ -1095,6 +1122,97 @@ export interface Product {
   createdAt: string;
 }
 /**
+ * Quote requests from customers. Enter a unit price for every item: the status changes to Priced and the customer can then submit their PO number, which issues the invoice.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "orders".
+ */
+export interface Order {
+  id: number;
+  orderNumber?: string | null;
+  status: 'submitted' | 'priced' | 'invoiced' | 'delivered' | 'paid' | 'cancelled';
+  customer: number | Customer;
+  items: {
+    product: number | Product;
+    quantity: number;
+    unitPrice?: number | null;
+    lineTotal?: number | null;
+    id?: string | null;
+  }[];
+  deliveryLocation?: string | null;
+  total?: number | null;
+  notes?: string | null;
+  /**
+   * Entered by the customer after pricing. Saving one issues the invoice.
+   */
+  poNumber?: string | null;
+  invoiceNumber?: string | null;
+  invoiceDate?: string | null;
+  dueDate?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
+ * Manufacturer accounts. Approve an account before the customer can log in.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "customers".
+ */
+export interface Customer {
+  id: number;
+  company: string;
+  name: string;
+  phone: string;
+  address?: string | null;
+  /**
+   * Only approved customers can log in.
+   */
+  approved?: boolean | null;
+  /**
+   * Invoice due date = invoice date + these days.
+   */
+  creditDays?: number | null;
+  updatedAt: string;
+  createdAt: string;
+  email: string;
+  resetPasswordToken?: string | null;
+  resetPasswordExpiration?: string | null;
+  salt?: string | null;
+  hash?: string | null;
+  loginAttempts?: number | null;
+  lockUntil?: string | null;
+  sessions?:
+    | {
+        id: string;
+        createdAt?: string | null;
+        expiresAt: string;
+      }[]
+    | null;
+  password?: string | null;
+  collection: 'customers';
+}
+/**
+ * Invoices appear here automatically. Add a Payment when a customer pays, or a Credit note to reduce what they owe.
+ *
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ledger-entries".
+ */
+export interface LedgerEntry {
+  id: number;
+  customer: number | Customer;
+  order?: (number | null) | Order;
+  type: 'invoice' | 'payment' | 'credit-note';
+  amount: number;
+  date: string;
+  /**
+   * Invoice number, bank reference, etc.
+   */
+  reference?: string | null;
+  note?: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+/**
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "jobs".
  */
@@ -1324,6 +1442,18 @@ export interface PayloadLockedDocument {
         value: number | Product;
       } | null)
     | ({
+        relationTo: 'orders';
+        value: number | Order;
+      } | null)
+    | ({
+        relationTo: 'ledger-entries';
+        value: number | LedgerEntry;
+      } | null)
+    | ({
+        relationTo: 'customers';
+        value: number | Customer;
+      } | null)
+    | ({
         relationTo: 'jobs';
         value: number | Job;
       } | null)
@@ -1364,10 +1494,15 @@ export interface PayloadLockedDocument {
         value: number | FolderInterface;
       } | null);
   globalSlug?: string | null;
-  user: {
-    relationTo: 'users';
-    value: number | User;
-  };
+  user:
+    | {
+        relationTo: 'customers';
+        value: number | Customer;
+      }
+    | {
+        relationTo: 'users';
+        value: number | User;
+      };
   updatedAt: string;
   createdAt: string;
 }
@@ -1377,10 +1512,15 @@ export interface PayloadLockedDocument {
  */
 export interface PayloadPreference {
   id: number;
-  user: {
-    relationTo: 'users';
-    value: number | User;
-  };
+  user:
+    | {
+        relationTo: 'customers';
+        value: number | Customer;
+      }
+    | {
+        relationTo: 'users';
+        value: number | User;
+      };
   key?: string | null;
   value?:
     | {
@@ -1731,6 +1871,76 @@ export interface ProductsSelect<T extends boolean = true> {
   slug?: T;
   updatedAt?: T;
   createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "orders_select".
+ */
+export interface OrdersSelect<T extends boolean = true> {
+  orderNumber?: T;
+  status?: T;
+  customer?: T;
+  items?:
+    | T
+    | {
+        product?: T;
+        quantity?: T;
+        unitPrice?: T;
+        lineTotal?: T;
+        id?: T;
+      };
+  deliveryLocation?: T;
+  total?: T;
+  notes?: T;
+  poNumber?: T;
+  invoiceNumber?: T;
+  invoiceDate?: T;
+  dueDate?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "ledger-entries_select".
+ */
+export interface LedgerEntriesSelect<T extends boolean = true> {
+  customer?: T;
+  order?: T;
+  type?: T;
+  amount?: T;
+  date?: T;
+  reference?: T;
+  note?: T;
+  updatedAt?: T;
+  createdAt?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "customers_select".
+ */
+export interface CustomersSelect<T extends boolean = true> {
+  company?: T;
+  name?: T;
+  phone?: T;
+  address?: T;
+  approved?: T;
+  creditDays?: T;
+  updatedAt?: T;
+  createdAt?: T;
+  email?: T;
+  resetPasswordToken?: T;
+  resetPasswordExpiration?: T;
+  salt?: T;
+  hash?: T;
+  loginAttempts?: T;
+  lockUntil?: T;
+  sessions?:
+    | T
+    | {
+        id?: T;
+        createdAt?: T;
+        expiresAt?: T;
+      };
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
@@ -2263,6 +2473,19 @@ export interface Footer {
 }
 /**
  * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "invoice-settings".
+ */
+export interface InvoiceSetting {
+  id: number;
+  bankName?: string | null;
+  accountName?: string | null;
+  accountNumber?: string | null;
+  notes?: string | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "header_select".
  */
 export interface HeaderSelect<T extends boolean = true> {
@@ -2303,6 +2526,19 @@ export interface FooterSelect<T extends boolean = true> {
             };
         id?: T;
       };
+  updatedAt?: T;
+  createdAt?: T;
+  globalType?: T;
+}
+/**
+ * This interface was referenced by `Config`'s JSON-Schema
+ * via the `definition` "invoice-settings_select".
+ */
+export interface InvoiceSettingsSelect<T extends boolean = true> {
+  bankName?: T;
+  accountName?: T;
+  accountNumber?: T;
+  notes?: T;
   updatedAt?: T;
   createdAt?: T;
   globalType?: T;

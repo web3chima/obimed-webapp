@@ -8,7 +8,7 @@ import { CMSLink } from '@/components/Link'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ClipboardListIcon, MenuIcon, SearchIcon, XIcon } from 'lucide-react'
+import { ClipboardListIcon, MenuIcon, SearchIcon, UserIcon, XIcon } from 'lucide-react'
 import { useQuoteBasket } from '@/providers/QuoteBasket'
 
 export const HeaderNav: React.FC<{ data: HeaderType }> = ({ data }) => {
@@ -26,6 +26,13 @@ export const HeaderNav: React.FC<{ data: HeaderType }> = ({ data }) => {
           {items.length}
         </span>
       )}
+    </Link>
+  )
+
+  const accountLink = (
+    <Link href="/account" className="p-2 text-heading hover:text-primary transition-colors">
+      <span className="sr-only">My account</span>
+      <UserIcon className="w-5" />
     </Link>
   )
 
@@ -51,6 +58,7 @@ export const HeaderNav: React.FC<{ data: HeaderType }> = ({ data }) => {
           <SearchIcon className="w-5" />
         </Link>
         {quoteLink}
+        {accountLink}
         <Button asChild>
           <Link href="/quote">Request a Quote</Link>
         </Button>
@@ -62,6 +70,7 @@ export const HeaderNav: React.FC<{ data: HeaderType }> = ({ data }) => {
           <SearchIcon className="w-5" />
         </Link>
         {quoteLink}
+        {accountLink}
         <button
           aria-controls="mobile-menu"
           aria-expanded={open}
