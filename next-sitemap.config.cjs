@@ -1,7 +1,14 @@
+// Ignore a localhost URL copied from a local .env when building on Vercel
+const configuredURL =
+  process.env.VERCEL && /localhost|127\.0\.0\.1/.test(process.env.NEXT_PUBLIC_SERVER_URL || '')
+    ? undefined
+    : process.env.NEXT_PUBLIC_SERVER_URL
+
 const SITE_URL =
-  process.env.NEXT_PUBLIC_SERVER_URL ||
-  process.env.VERCEL_PROJECT_PRODUCTION_URL ||
-  'https://example.com'
+  configuredURL ||
+  (process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : 'https://example.com')
 
 /** @type {import('next-sitemap').IConfig} */
 module.exports = {

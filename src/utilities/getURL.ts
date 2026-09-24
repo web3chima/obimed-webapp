@@ -1,8 +1,15 @@
 import canUseDOM from './canUseDOM'
 
+// A localhost URL copied from a local .env must not leak into a Vercel deployment
+const configuredServerURL = () => {
+  const url = process.env.NEXT_PUBLIC_SERVER_URL
+  if (url && process.env.VERCEL && /localhost|127\.0\.0\.1/.test(url)) return undefined
+  return url
+}
+
 export const getServerSideURL = () => {
   return (
-    process.env.NEXT_PUBLIC_SERVER_URL ||
+    configuredServerURL() ||
     (process.env.VERCEL_PROJECT_PRODUCTION_URL
       ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
       : 'http://localhost:3000')
@@ -22,5 +29,5 @@ export const getClientSideURL = () => {
     return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
   }
 
-  return process.env.NEXT_PUBLIC_SERVER_URL || ''
+  return configuredServerURL() || ''
 }

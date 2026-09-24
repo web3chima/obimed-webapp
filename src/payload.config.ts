@@ -17,6 +17,15 @@ import { plugins } from './plugins'
 import { defaultLexical } from '@/fields/defaultLexical'
 import { getServerSideURL } from './utilities/getURL'
 
+// Fail early with a clear message instead of an opaque build error (e.g. on Vercel, where
+// .env is not uploaded and these must be set under Settings → Environment Variables)
+const missingEnv = ['PAYLOAD_SECRET', 'DATABASE_URL'].filter((name) => !process.env[name])
+if (missingEnv.length > 0) {
+  throw new Error(
+    `Missing environment variables: ${missingEnv.join(', ')}. Set them in .env locally, or in Vercel under Settings → Environment Variables (see .env.example).`,
+  )
+}
+
 const filename = fileURLToPath(import.meta.url)
 const dirname = path.dirname(filename)
 
