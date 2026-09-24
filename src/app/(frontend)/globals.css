@@ -1,0 +1,330 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@config '../../../tailwind.config.mjs';
+
+@custom-variant dark (&:is([data-theme='dark'] *));
+@custom-variant sm (@media (width >= theme(--breakpoint-sm)));
+@custom-variant md (@media (width >= theme(--breakpoint-md)));
+@custom-variant lg (@media (width >= theme(--breakpoint-lg)));
+@custom-variant xl (@media (width >= theme(--breakpoint-xl)));
+@custom-variant 2xl (@media (width >= theme(--breakpoint-2xl)));
+
+/* A .reveal-card is "active" when hovered (pointer devices), keyboard-focused within, or tapped open (data-open) */
+@custom-variant card-active {
+  &:where(.reveal-card[data-open] *, .reveal-card:has(:focus-visible) *) {
+    @slot;
+  }
+  @media (hover: hover) {
+    &:where(.reveal-card:hover *) {
+      @slot;
+    }
+  }
+}
+@custom-variant card-self-active {
+  &:is([data-open], :has(:focus-visible)) {
+    @slot;
+  }
+  @media (hover: hover) {
+    &:hover {
+      @slot;
+    }
+  }
+}
+
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-weight: unset;
+    font-size: unset;
+  }
+}
+
+@plugin "@tailwindcss/typography";
+
+@source inline("lg:col-span-4");
+@source inline("lg:col-span-6");
+@source inline("lg:col-span-8");
+@source inline("lg:col-span-12");
+@source inline("border-border");
+@source inline("bg-card");
+@source inline("border-error");
+@source inline("bg-error/30");
+@source inline("border-success");
+@source inline("bg-success/30");
+@source inline("border-warning");
+@source inline("bg-warning/30");
+
+@theme {
+  --breakpoint-sm: 40rem;
+  --breakpoint-md: 48rem;
+  --breakpoint-lg: 64rem;
+  --breakpoint-xl: 80rem;
+  --breakpoint-2xl: 86rem;
+  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-open-sans);
+  --font-heading: var(--font-montserrat);
+}
+
+@layer utilities {
+  .container {
+    width: 100%;
+    margin-inline: auto;
+    padding-inline: 1rem;
+  }
+
+  @variant sm {
+    .container {
+      max-width: var(--breakpoint-sm);
+    }
+  }
+
+  @variant md {
+    .container {
+      max-width: var(--breakpoint-md);
+      padding-inline: 2rem;
+    }
+  }
+
+  @variant lg {
+    .container {
+      max-width: var(--breakpoint-lg);
+    }
+  }
+
+  @variant xl {
+    .container {
+      max-width: var(--breakpoint-xl);
+    }
+  }
+
+  @variant 2xl {
+    .container {
+      max-width: var(--breakpoint-2xl);
+    }
+  }
+}
+
+:root {
+  /* Obimed brand */
+  --brand-purple: #483998;
+  --brand-purple-dark: #2f2566;
+  --brand-green: #96bb49;
+  --brand-charcoal: #4b4b4d;
+  /* Darker green for small text on light backgrounds (4.8:1 on white) */
+  --brand-green-ink: #5f7d25;
+
+  --background: #ffffff;
+  --foreground: #4b4b4d;
+  --heading: #2f2566;
+  --card: #f7f6fb;
+  --card-foreground: #4b4b4d;
+  --popover: #ffffff;
+  --popover-foreground: #4b4b4d;
+  --primary: #483998;
+  --primary-foreground: #ffffff;
+  /* Green is too light for text, so it always carries dark purple text */
+  --secondary: #96bb49;
+  --secondary-foreground: #241c52;
+  --muted: #f4f3f8;
+  --muted-foreground: #66666b;
+  --accent: #eeebf8;
+  --accent-foreground: #483998;
+  --destructive: oklch(57.7% 0.245 27.325deg);
+  --destructive-foreground: oklch(57.7% 0.245 27.325deg);
+  --border: #e4e1ef;
+  --input: #d9d6e6;
+  --ring: #483998;
+  --chart-1: #483998;
+  --chart-2: #96bb49;
+  --chart-3: #8f84e0;
+  --chart-4: #5f7d25;
+  --chart-5: #4b4b4d;
+  --radius: 0.625rem;
+  --sidebar: #f7f6fb;
+  --sidebar-foreground: #4b4b4d;
+  --sidebar-primary: #483998;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #eeebf8;
+  --sidebar-accent-foreground: #483998;
+  --sidebar-border: #e4e1ef;
+  --sidebar-ring: #483998;
+  --success: oklch(78% 0.08 200deg);
+  --warning: oklch(89% 0.1 75deg);
+  --error: oklch(75% 0.15 25deg);
+}
+
+[data-theme='dark'] {
+  --brand-green-ink: #96bb49;
+  --background: #15112b;
+  --foreground: #e9e7f3;
+  --heading: #ffffff;
+  --card: #1e1940;
+  --card-foreground: #e9e7f3;
+  --popover: #15112b;
+  --popover-foreground: #e9e7f3;
+  --primary: #a79ef0;
+  --primary-foreground: #15112b;
+  --secondary: #96bb49;
+  --secondary-foreground: #15112b;
+  --muted: #221d47;
+  --muted-foreground: #b3afc9;
+  --accent: #2a2455;
+  --accent-foreground: #e9e7f3;
+  --destructive: oklch(39.6% 0.141 25.723deg);
+  --destructive-foreground: oklch(63.7% 0.237 25.331deg);
+  --border: #2e285a;
+  --input: #3a3470;
+  --ring: #a79ef0;
+  --chart-1: #a79ef0;
+  --chart-2: #96bb49;
+  --chart-3: #6f60d0;
+  --chart-4: #c3db8f;
+  --chart-5: #e9e7f3;
+  --sidebar: #1e1940;
+  --sidebar-foreground: #e9e7f3;
+  --sidebar-primary: #a79ef0;
+  --sidebar-primary-foreground: #15112b;
+  --sidebar-accent: #2a2455;
+  --sidebar-accent-foreground: #e9e7f3;
+  --sidebar-border: #2e285a;
+  --sidebar-ring: #a79ef0;
+  --success: oklch(28% 0.1 200deg);
+  --warning: oklch(35% 0.08 70deg);
+  --error: oklch(45% 0.1 25deg);
+}
+
+@theme inline {
+  --color-brand-purple: var(--brand-purple);
+  --color-brand-purple-dark: var(--brand-purple-dark);
+  --color-brand-green: var(--brand-green);
+  --color-brand-charcoal: var(--brand-charcoal);
+  --color-brand-green-ink: var(--brand-green-ink);
+  --color-heading: var(--heading);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-error: var(--error);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground font-sans min-h-[100vh] flex flex-col;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-heading text-heading;
+  }
+}
+
+html {
+  opacity: 0;
+}
+
+html[data-theme='dark'],
+html[data-theme='light'] {
+  opacity: initial;
+}
+
+/* Logo strip: moves left to right, pauses on hover */
+@keyframes marquee-ltr {
+  from {
+    transform: translateX(-50%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.marquee-track {
+  animation: marquee-ltr 40s linear infinite;
+}
+
+.marquee:hover .marquee-track,
+.logo-strip:hover .marquee-track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
+  }
+}
+
+/* Products process slider: fills the active step's progress line */
+@keyframes step-progress {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+/* "Coming soon" shimmer */
+@keyframes shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-shimmer {
+    animation: none !important;
+  }
+}
+
+/* Scroll-reveal content stays visible when JavaScript is off */
+@media (scripting: none) {
+  .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
