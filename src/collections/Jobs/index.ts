@@ -7,7 +7,7 @@ import type {
 import { revalidatePath } from 'next/cache'
 
 import { anyone } from '../../access/anyone'
-import { authenticated } from '../../access/authenticated'
+import { contentEditors } from '../../access/roles'
 
 const revalidateCareers: CollectionAfterChangeHook = ({ doc, req: { context } }) => {
   if (!context.disableRevalidate) revalidatePath('/careers')
@@ -23,10 +23,10 @@ export const Jobs: CollectionConfig<'jobs'> = {
   slug: 'jobs',
   labels: { singular: 'Job', plural: 'Jobs' },
   access: {
-    create: authenticated,
-    delete: authenticated,
+    create: contentEditors,
+    delete: contentEditors,
     read: anyone,
-    update: authenticated,
+    update: contentEditors,
   },
   admin: {
     defaultColumns: ['title', 'location', 'isOpen', 'closingDate'],

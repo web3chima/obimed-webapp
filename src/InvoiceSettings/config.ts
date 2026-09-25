@@ -1,6 +1,6 @@
 import type { GlobalConfig } from 'payload'
 
-import { isCustomerUser, isStaffUser, staffOnly } from '../access/roles'
+import { isCustomerUser, hasRole, salesStaff } from '../access/roles'
 
 // Bank details and notes printed on every invoice
 export const InvoiceSettings: GlobalConfig = {
@@ -12,8 +12,8 @@ export const InvoiceSettings: GlobalConfig = {
       'Bank details printed on invoices, and who at Obimed receives order notifications.',
   },
   access: {
-    read: ({ req: { user } }) => isStaffUser(user) || isCustomerUser(user),
-    update: staffOnly,
+    read: ({ req: { user } }) => hasRole(user, 'sales') || isCustomerUser(user),
+    update: salesStaff,
   },
   fields: [
     {

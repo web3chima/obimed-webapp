@@ -1,9 +1,17 @@
 import type { CollectionConfig, FieldAccess } from 'payload'
 
-import { isStaffUser, staffOnly, staffOnlyField, staffOrOwnCustomer } from '../../access/roles'
+import {
+  hasRole,
+  salesOrOwnCustomer,
+  salesStaff,
+  salesStaffField,
+  superAdminField,
+} from '../../access/roles'
 import {
   assignOrderNumber,
   calculateTotals,
+  creditCancelledInvoice,
+  enforceOrderRules,
   issueInvoiceOnPO,
   notifyOrderChanges,
   recordInvoiceInLedger,
@@ -12,9 +20,9 @@ import { requestQuoteEndpoint, submitPOEndpoint } from './endpoints'
 
 // Prices stay hidden from the customer until they have entered their PO number
 const pricesVisible: FieldAccess = ({ req: { user }, doc }) =>
-  isStaffUser(user) || Boolean(doc?.poNumber)
+  hasRole(user, 'sales') || Boolean(doc?.poNumber)
 
-const priceFieldAccess = { read: pricesVisible, create: staffOnlyField, update: staffOnlyField }
+const priceFieldAccess = { read: pricesVisible, create: salesStaffField, update: salesStaffField }
 
 export const orderStatusOptions = [
   { label: 'Submitted (awaiting prices)', value: 'submitted' },
@@ -31,25 +39,37 @@ export const Orders: CollectionConfig<'orders'> = {
   slug: 'orders',
   labels: { singular: 'Order', plural: 'Orders' },
   access: {
-    create: staffOnly,
-    read: staffOrOwnCustomer('customer'),
-    update: staffOnly,
-    delete: staffOnly,
+    // Customers order through /api/orders/request; sales staff may also enter an order for an
+    // approved customer (e.g. a PO received by phone)
+    create: salesStaff,
+    read: salesOrOwnCustomer('customer'),
+    update: salesStaff,
+    delete: salesStaff,
   },
   admin: {
     group: 'Sales',
     defaultColumns: ['orderNumber', 'customer', 'status', 'total', 'updatedAt'],
     useAsTitle: 'orderNumber',
     description:
-      'Quote requests from customers. Enter a unit price for every item: the status changes to Priced and the customer can then submit their PO number, which issues the invoice.',
+      'Quote requests from customers (or entered by staff for an approved customer). Open one and follow the instructions at the top.',
+    components: {
+      beforeListTable: ['@/collections/Orders/admin/StatusTabs#StatusTabs'],
+    },
   },
   defaultSort: '-createdAt',
   endpoints: [requestQuoteEndpoint, submitPOEndpoint],
   hooks: {
-    beforeChange: [assignOrderNumber, calculateTotals, issueInvoiceOnPO],
-    afterChange: [recordInvoiceInLedger, notifyOrderChanges],
+    beforeChange: [assignOrderNumber, calculateTotals, issueInvoiceOnPO, enforceOrderRules],
+    afterChange: [recordInvoiceInLedger, creditCancelledInvoice, notifyOrderChanges],
   },
   fields: [
+    {
+      name: 'nextStep',
+      type: 'ui',
+      admin: {
+        components: { Field: '@/collections/Orders/admin/NextStep#NextStep' },
+      },
+    },
     {
       type: 'row',
       fields: [
@@ -66,6 +86,10 @@ export const Orders: CollectionConfig<'orders'> = {
           defaultValue: 'submitted',
           options: orderStatusOptions,
           required: true,
+          admin: {
+            description:
+              'Moves forward only. Priced, Invoiced and Paid are set automatically; you can set Delivered, or Cancelled (after invoicing, a credit note is added to the ledger).',
+          },
         },
       ],
     },
@@ -74,23 +98,38 @@ export const Orders: CollectionConfig<'orders'> = {
       type: 'relationship',
       relationTo: 'customers',
       required: true,
+      // Chosen when a staff member creates the order; fixed afterwards
+      access: { update: () => false },
+      filterOptions: { approved: { equals: true } },
     },
     {
       name: 'items',
       type: 'array',
       minRows: 1,
       required: true,
+      admin: {
+        isSortable: false,
+        components: { RowLabel: '@/collections/Orders/admin/ItemRowLabel#ItemRowLabel' },
+      },
       fields: [
         {
           type: 'row',
           fields: [
-            { name: 'product', type: 'relationship', relationTo: 'products', required: true },
+            {
+              name: 'product',
+              type: 'relationship',
+              relationTo: 'products',
+              required: true,
+              // Only a super admin may adjust a request, and only while it awaits prices
+              access: { update: superAdminField },
+            },
             {
               name: 'quantity',
               label: 'Quantity (bags)',
               type: 'number',
               min: 1,
               required: true,
+              access: { update: superAdminField },
             },
             {
               name: 'unitPrice',
@@ -134,7 +173,9 @@ export const Orders: CollectionConfig<'orders'> = {
       type: 'text',
       admin: {
         position: 'sidebar',
-        description: 'Entered by the customer after pricing. Saving one issues the invoice.',
+        description:
+          'Entered by the customer after pricing. If they sent it to you, type it here and Save to issue the invoice. Fixed once invoiced.',
+        condition: (data) => data?.status !== 'submitted',
       },
     },
     {

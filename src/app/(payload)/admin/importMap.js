@@ -17,6 +17,9 @@ import { MetaImageComponent as MetaImageComponent_a8a977ebc872c5d5ea7ee689724c08
 import { MetaDescriptionComponent as MetaDescriptionComponent_a8a977ebc872c5d5ea7ee689724c0860 } from '@payloadcms/plugin-seo/client'
 import { PreviewComponent as PreviewComponent_a8a977ebc872c5d5ea7ee689724c0860 } from '@payloadcms/plugin-seo/client'
 import { SlugField as SlugField_2b8867833a34864a02ddf429b0728a40 } from '@payloadcms/next/client'
+import { NextStep as NextStep_03a583707fea1397f991518834241b50 } from '@/collections/Orders/admin/NextStep'
+import { ItemRowLabel as ItemRowLabel_c0b24e92668dece9e5d15b3d4ea9e145 } from '@/collections/Orders/admin/ItemRowLabel'
+import { StatusTabs as StatusTabs_b00952e4ebb7d69eac1d8c1abaad72a3 } from '@/collections/Orders/admin/StatusTabs'
 import { HorizontalRuleFeatureClient as HorizontalRuleFeatureClient_e70f5e05f09f93e00b997edb1ef0c864 } from '@payloadcms/richtext-lexical/client'
 import { BlocksFeatureClient as BlocksFeatureClient_e70f5e05f09f93e00b997edb1ef0c864 } from '@payloadcms/richtext-lexical/client'
 import { FolderTableCell as FolderTableCell_f9c02e79a4aed9a3924487c0cd4cafb1 } from '@payloadcms/next/rsc'
@@ -52,6 +55,9 @@ export const importMap = {
   "@payloadcms/plugin-seo/client#MetaDescriptionComponent": MetaDescriptionComponent_a8a977ebc872c5d5ea7ee689724c0860,
   "@payloadcms/plugin-seo/client#PreviewComponent": PreviewComponent_a8a977ebc872c5d5ea7ee689724c0860,
   "@payloadcms/next/client#SlugField": SlugField_2b8867833a34864a02ddf429b0728a40,
+  "@/collections/Orders/admin/NextStep#NextStep": NextStep_03a583707fea1397f991518834241b50,
+  "@/collections/Orders/admin/ItemRowLabel#ItemRowLabel": ItemRowLabel_c0b24e92668dece9e5d15b3d4ea9e145,
+  "@/collections/Orders/admin/StatusTabs#StatusTabs": StatusTabs_b00952e4ebb7d69eac1d8c1abaad72a3,
   "@payloadcms/richtext-lexical/client#HorizontalRuleFeatureClient": HorizontalRuleFeatureClient_e70f5e05f09f93e00b997edb1ef0c864,
   "@payloadcms/richtext-lexical/client#BlocksFeatureClient": BlocksFeatureClient_e70f5e05f09f93e00b997edb1ef0c864,
   "@payloadcms/next/rsc#FolderTableCell": FolderTableCell_f9c02e79a4aed9a3924487c0cd4cafb1,

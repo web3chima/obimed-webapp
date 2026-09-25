@@ -3,7 +3,7 @@ import type { CollectionConfig } from 'payload'
 import { slugField } from 'payload'
 
 import { anyone } from '../../access/anyone'
-import { authenticated } from '../../access/authenticated'
+import { contentEditors } from '../../access/roles'
 import { revalidateProduct, revalidateProductDelete } from './hooks/revalidateProduct'
 
 export const productCategoryOptions = [
@@ -15,10 +15,10 @@ export const productCategoryOptions = [
 export const Products: CollectionConfig<'products'> = {
   slug: 'products',
   access: {
-    create: authenticated,
-    delete: authenticated,
+    create: contentEditors,
+    delete: contentEditors,
     read: anyone,
-    update: authenticated,
+    update: contentEditors,
   },
   defaultPopulate: {
     title: true,

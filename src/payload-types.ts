@@ -479,6 +479,10 @@ export interface Category {
 export interface User {
   id: number;
   name?: string | null;
+  /**
+   * Only a super admin can change roles.
+   */
+  role: 'super-admin' | 'sales' | 'editor';
   updatedAt: string;
   createdAt: string;
   email: string;
@@ -1122,7 +1126,7 @@ export interface Product {
   createdAt: string;
 }
 /**
- * Quote requests from customers. Enter a unit price for every item: the status changes to Priced and the customer can then submit their PO number, which issues the invoice.
+ * Quote requests from customers. Open one and follow the instructions at the top of the order.
  *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "orders".
@@ -1130,6 +1134,9 @@ export interface Product {
 export interface Order {
   id: number;
   orderNumber?: string | null;
+  /**
+   * Moves forward only. Priced, Invoiced and Paid are set automatically; you can set Delivered or Cancelled.
+   */
   status: 'submitted' | 'priced' | 'invoiced' | 'delivered' | 'paid' | 'cancelled';
   customer: number | Customer;
   items: {
@@ -1143,7 +1150,7 @@ export interface Order {
   total?: number | null;
   notes?: string | null;
   /**
-   * Entered by the customer after pricing. Saving one issues the invoice.
+   * Entered by the customer after pricing. If they sent it to you, type it here and Save to issue the invoice. Fixed once invoiced.
    */
   poNumber?: string | null;
   invoiceNumber?: string | null;
@@ -2121,6 +2128,7 @@ export interface CategoriesSelect<T extends boolean = true> {
  */
 export interface UsersSelect<T extends boolean = true> {
   name?: T;
+  role?: T;
   updatedAt?: T;
   createdAt?: T;
   email?: T;

@@ -1,5 +1,7 @@
 import type { GlobalConfig } from 'payload'
 
+import { contentEditors } from '../access/roles'
+
 import { link } from '@/fields/link'
 import { revalidateHeader } from './hooks/revalidateHeader'
 
@@ -7,6 +9,7 @@ export const Header: GlobalConfig = {
   slug: 'header',
   access: {
     read: () => true,
+    update: contentEditors,
   },
   fields: [
     {

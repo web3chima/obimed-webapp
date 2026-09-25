@@ -6,11 +6,7 @@ import type { LedgerEntry } from '@/payload-types'
 export const signedAmount = (entry: Pick<LedgerEntry, 'type' | 'amount'>) =>
   entry.type === 'invoice' ? entry.amount : -entry.amount
 
-const sumEntries = async (
-  payload: Payload,
-  where: Where,
-  req?: PayloadRequest,
-) => {
+const sumEntries = async (payload: Payload, where: Where, req?: PayloadRequest) => {
   const { docs } = await payload.find({
     collection: 'ledger-entries',
     where,

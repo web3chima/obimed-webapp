@@ -5,6 +5,7 @@ import { seoPlugin } from '@payloadcms/plugin-seo'
 import { searchPlugin } from '@payloadcms/plugin-search'
 import { vercelBlobStorage } from '@payloadcms/storage-vercel-blob'
 import { Plugin } from 'payload'
+import { contentEditors, staffWith } from '@/access/roles'
 import { revalidateRedirects } from '@/hooks/revalidateRedirects'
 import { GenerateTitle, GenerateURL } from '@payloadcms/plugin-seo/types'
 import { FixedToolbarFeature, HeadingFeature, lexicalEditor } from '@payloadcms/richtext-lexical'
@@ -36,6 +37,12 @@ export const plugins: Plugin[] = [
   redirectsPlugin({
     collections: ['pages', 'posts'],
     overrides: {
+      access: {
+        read: () => true,
+        create: contentEditors,
+        update: contentEditors,
+        delete: contentEditors,
+      },
       // @ts-expect-error - This is a valid override, mapped fields don't resolve to the same type
       fields: ({ defaultFields }) => {
         return defaultFields.map((field) => {
@@ -67,7 +74,22 @@ export const plugins: Plugin[] = [
     fields: {
       payment: false,
     },
+    // Anyone may submit a form; editors and sales staff can read the submissions
+    formSubmissionOverrides: {
+      access: {
+        create: () => true,
+        read: staffWith('editor', 'sales'),
+        update: contentEditors,
+        delete: contentEditors,
+      },
+    },
     formOverrides: {
+      access: {
+        read: () => true,
+        create: contentEditors,
+        update: contentEditors,
+        delete: contentEditors,
+      },
       fields: ({ defaultFields }) => {
         return defaultFields.map((field) => {
           if ('name' in field && field.name === 'confirmationMessage') {
@@ -93,6 +115,12 @@ export const plugins: Plugin[] = [
     collections: ['posts'],
     beforeSync: beforeSyncWithSearch,
     searchOverrides: {
+      access: {
+        read: () => true,
+        create: contentEditors,
+        update: contentEditors,
+        delete: contentEditors,
+      },
       fields: ({ defaultFields }) => {
         return [...defaultFields, ...searchFields]
       },

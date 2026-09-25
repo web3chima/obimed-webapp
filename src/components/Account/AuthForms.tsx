@@ -55,7 +55,7 @@ export const LoginForm: React.FC = () => {
     e.preventDefault()
     setBusy(true)
     setError(null)
-    const res = await fetch('/api/customers/login', {
+    const res = await fetch('/api/customers/session', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -238,7 +238,7 @@ export const LogoutButton: React.FC = () => {
   return (
     <Button
       onClick={async () => {
-        await fetch('/api/customers/logout', { method: 'POST', credentials: 'include' })
+        await fetch('/api/customers/session', { method: 'DELETE', credentials: 'include' })
         router.push('/account/login')
         router.refresh()
       }}

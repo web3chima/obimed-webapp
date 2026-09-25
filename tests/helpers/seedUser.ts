@@ -25,7 +25,8 @@ export async function seedTestUser(): Promise<void> {
   // Create fresh test user
   await payload.create({
     collection: 'users',
-    data: testUser,
+    // Admin end-to-end tests exercise every part of the admin
+    data: { ...testUser, role: 'super-admin' },
   })
 }
 

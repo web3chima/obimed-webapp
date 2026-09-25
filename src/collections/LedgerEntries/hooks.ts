@@ -30,6 +30,7 @@ export const settleOrder: CollectionAfterChangeHook<LedgerEntry> = async ({
         id: orderId,
         data: { status: 'paid' },
         overrideAccess: true,
+        context: { settledByLedger: true },
         req,
       })
       return doc

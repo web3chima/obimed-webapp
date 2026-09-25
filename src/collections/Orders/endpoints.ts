@@ -1,6 +1,6 @@
 import type { Endpoint, PayloadRequest } from 'payload'
 
-import { isCustomerUser } from '../../access/roles'
+import { getCustomerFromHeaders } from '@/auth/customerSession'
 
 const MAX_ITEMS = 50
 const MAX_TEXT = 500
@@ -24,7 +24,8 @@ export const requestQuoteEndpoint: Endpoint = {
   path: '/request',
   method: 'post',
   handler: async (req) => {
-    if (!isCustomerUser(req.user)) return error('Please log in to your customer account.', 401)
+    const customer = await getCustomerFromHeaders(req.payload, req.headers)
+    if (!customer) return error('Please log in to your customer account.', 401)
 
     const body = await readBody(req)
     const rawItems = Array.isArray(body.items) ? body.items.slice(0, MAX_ITEMS) : []
@@ -64,7 +65,7 @@ export const requestQuoteEndpoint: Endpoint = {
     const order = await req.payload.create({
       collection: 'orders',
       data: {
-        customer: req.user!.id as number,
+        customer: customer.id,
         status: 'submitted',
         items: requested.map((item) => ({
           product: bySlug.get(item.slug)!.id,
@@ -87,7 +88,8 @@ export const submitPOEndpoint: Endpoint = {
   path: '/:id/po',
   method: 'post',
   handler: async (req) => {
-    if (!isCustomerUser(req.user)) return error('Please log in to your customer account.', 401)
+    const customer = await getCustomerFromHeaders(req.payload, req.headers)
+    if (!customer) return error('Please log in to your customer account.', 401)
 
     const id = Number(req.routeParams?.id)
     const body = await readBody(req)
@@ -99,7 +101,7 @@ export const submitPOEndpoint: Endpoint = {
       .catch(() => null)
 
     const ownerId = typeof order?.customer === 'object' ? order.customer?.id : order?.customer
-    if (!order || ownerId !== req.user!.id) return error('Order not found.', 404)
+    if (!order || ownerId !== customer.id) return error('Order not found.', 404)
     if (order.poNumber) return error('A PO number has already been submitted for this order.', 409)
     if (order.status !== 'priced') {
       return error(

@@ -1,6 +1,6 @@
 import type { CollectionConfig } from 'payload'
 
-import { staffOnly, staffOrOwnCustomer } from '../../access/roles'
+import { salesStaff, salesOrOwnCustomer } from '../../access/roles'
 import { settleOrder } from './hooks'
 
 // Customer account ledger. Invoices are added automatically when a customer submits a PO;
@@ -9,10 +9,10 @@ export const LedgerEntries: CollectionConfig<'ledger-entries'> = {
   slug: 'ledger-entries',
   labels: { singular: 'Ledger entry', plural: 'Ledger' },
   access: {
-    create: staffOnly,
-    read: staffOrOwnCustomer('customer'),
-    update: staffOnly,
-    delete: staffOnly,
+    create: salesStaff,
+    read: salesOrOwnCustomer('customer'),
+    update: salesStaff,
+    delete: salesStaff,
   },
   admin: {
     group: 'Sales',

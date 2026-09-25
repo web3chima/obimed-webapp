@@ -1,4 +1,6 @@
 // Checks that a logged-in customer can't do anything an anonymous visitor can't, except the
+// few customer-specific rights listed below, and that staff roles stay within their areas.
+// (Customer part:)
 // few customer-specific rights listed below. Payload treats a missing access function as
 // "anyone logged in", so new collections, globals or plugins can silently open holes.
 // Run from the project root: bun src/scripts/audit-customer-access.ts
@@ -59,9 +61,69 @@ for (const global of payload.config.globals) {
   }
 }
 
+// ---- Staff roles ---------------------------------------------------------------------------
+// Content editors get nothing extra on sales data; sales staff can't write site content; neither
+// can manage other staff accounts.
+const salesResources = ['orders', 'customers', 'ledger-entries', 'global:invoice-settings']
+const contentResources = [
+  'pages',
+  'posts',
+  'products',
+  'media',
+  'categories',
+  'jobs',
+  'forms',
+  'redirects',
+  'search',
+  'global:header',
+  'global:footer',
+]
+const staffUser = (role: string, id: number) =>
+  ({
+    payload,
+    user: { id, collection: 'users', role, email: `${role}@example.com` },
+  }) as unknown as PayloadRequest
+
+const checkRole = async (key: string, fn: AccessFn | undefined) => {
+  const [resource, op] = [key.slice(0, key.lastIndexOf('.')), key.slice(key.lastIndexOf('.') + 1)]
+  const asAnonymous = describe(await run(fn, anonymous))
+  const asEditor = describe(await run(fn, staffUser('editor', 999997)))
+  const asSales = describe(await run(fn, staffUser('sales', 999998)))
+
+  if (salesResources.includes(resource) && asEditor !== asAnonymous) {
+    problems.push(`${key}: editor=${asEditor} (expected anonymous=${asAnonymous})`)
+  }
+  if (
+    contentResources.includes(resource) &&
+    ['create', 'update', 'delete'].includes(op) &&
+    asSales !== 'false'
+  ) {
+    problems.push(`${key}: sales=${asSales} (sales must not change content)`)
+  }
+  if (resource === 'users') {
+    const own = (result: string, id: number) =>
+      ['create', 'delete', 'unlock'].includes(op)
+        ? result === 'false'
+        : result.includes(String(id)) && result !== 'true'
+    if (!own(asEditor, 999997)) problems.push(`${key}: editor=${asEditor}`)
+    if (!own(asSales, 999998)) problems.push(`${key}: sales=${asSales}`)
+  }
+}
+
+for (const collection of payload.config.collections) {
+  for (const op of ['create', 'read', 'update', 'delete', 'readVersions', 'unlock'] as const) {
+    await checkRole(`${collection.slug}.${op}`, collection.access?.[op] as AccessFn | undefined)
+  }
+}
+for (const global of payload.config.globals) {
+  for (const op of ['read', 'update', 'readVersions'] as const) {
+    await checkRole(`global:${global.slug}.${op}`, global.access?.[op] as AccessFn | undefined)
+  }
+}
+
 if (problems.length > 0) {
-  console.error(`Customer access audit FAILED (${problems.length}):\n  ${problems.join('\n  ')}`)
+  console.error(`Access audit FAILED (${problems.length}):\n  ${problems.join('\n  ')}`)
   process.exit(1)
 }
-console.log('Customer access audit passed: customers only have their intended extra rights.')
+console.log('Access audit passed: customers and staff roles only have their intended rights.')
 process.exit(0)

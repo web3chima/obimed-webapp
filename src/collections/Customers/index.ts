@@ -4,7 +4,8 @@ import { APIError } from 'payload'
 
 import { notifyAccountApproved, notifyNewRegistration } from '@/notifications'
 
-import { isCustomerUser, isStaffUser, staffOnly, staffOnlyField } from '../../access/roles'
+import { isCustomerUser, hasRole, salesStaff, salesStaffField } from '../../access/roles'
+import { customerSignIn, customerSignOut } from './endpoints'
 
 // Manufacturer accounts for ordering, POs, invoices and the ledger. Separate from staff `users`.
 export const Customers: CollectionConfig<'customers'> = {
@@ -19,17 +20,17 @@ export const Customers: CollectionConfig<'customers'> = {
     // Anyone can register; the account stays unapproved until staff approve it
     create: () => true,
     read: ({ req: { user } }) => {
-      if (isStaffUser(user)) return true
+      if (hasRole(user, 'sales')) return true
       if (isCustomerUser(user)) return { id: { equals: user!.id } }
       return false
     },
     update: ({ req: { user } }) => {
-      if (isStaffUser(user)) return true
+      if (hasRole(user, 'sales')) return true
       if (isCustomerUser(user)) return { id: { equals: user!.id } }
       return false
     },
-    delete: staffOnly,
-    unlock: staffOnly,
+    delete: salesStaff,
+    unlock: salesStaff,
   },
   admin: {
     group: 'Sales',
@@ -37,6 +38,7 @@ export const Customers: CollectionConfig<'customers'> = {
     useAsTitle: 'company',
     description: 'Manufacturer accounts. Approve an account before the customer can log in.',
   },
+  endpoints: [customerSignIn, customerSignOut],
   hooks: {
     afterChange: [
       async ({ doc, operation, previousDoc, req }) => {
@@ -82,7 +84,7 @@ export const Customers: CollectionConfig<'customers'> = {
       name: 'approved',
       type: 'checkbox',
       defaultValue: false,
-      access: { create: staffOnlyField, update: staffOnlyField },
+      access: { create: salesStaffField, update: salesStaffField },
       admin: { position: 'sidebar', description: 'Only approved customers can log in.' },
     },
     {
@@ -91,7 +93,7 @@ export const Customers: CollectionConfig<'customers'> = {
       type: 'number',
       defaultValue: 15,
       min: 0,
-      access: { create: staffOnlyField, update: staffOnlyField },
+      access: { create: salesStaffField, update: salesStaffField },
       admin: { position: 'sidebar', description: 'Invoice due date = invoice date + these days.' },
     },
   ],
