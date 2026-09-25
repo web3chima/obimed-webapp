@@ -16,3 +16,15 @@ export const formatDate = (value: string | null | undefined) =>
         timeZone: 'Africa/Lagos',
       })
     : '—'
+
+export const formatDateTime = (value: string | null | undefined) =>
+  value
+    ? new Date(value).toLocaleString('en-GB', {
+        day: 'numeric',
+        month: 'long',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Africa/Lagos',
+      })
+    : '—'

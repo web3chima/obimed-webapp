@@ -9,7 +9,7 @@ import { ChevronLeftIcon } from 'lucide-react'
 
 import { PrintButton } from '@/components/Account/PrintButton'
 import { Logo } from '@/components/Logo/Logo'
-import { formatDate, formatNaira } from '@/utilities/format'
+import { formatDate, formatDateTime, formatNaira } from '@/utilities/format'
 import { getCustomer } from '@/utilities/getCustomer'
 import { getCustomerOrder } from '@/utilities/getCustomerOrder'
 import { formatPhone, siteConfig } from '@/utilities/siteConfig'
@@ -45,6 +45,11 @@ export default async function InvoicePage({ params }: Args) {
       </div>
 
       <article className="rounded-2xl border border-border bg-white p-8 text-[#4b4b4d] md:p-12 print:rounded-none print:border-0 print:p-0">
+        {(order.status === 'expired' || order.status === 'cancelled') && (
+          <p className="mb-6 rounded-lg border-2 border-destructive px-4 py-3 text-center font-heading font-bold uppercase tracking-wider text-destructive">
+            {order.status === 'expired' ? 'Expired: not payable' : 'Cancelled: not payable'}
+          </p>
+        )}
         <header className="flex flex-col gap-6 border-b-4 border-brand-green pb-8 md:flex-row md:items-start md:justify-between">
           <div>
             <Logo className="h-12" variant="color" />
@@ -65,8 +70,20 @@ export default async function InvoicePage({ params }: Args) {
               <dd>{order.invoiceNumber}</dd>
               <dt className="font-semibold">Invoice date</dt>
               <dd>{formatDate(order.invoiceDate)}</dd>
-              <dt className="font-semibold">Due date</dt>
-              <dd className="font-bold text-[#2f2566]">{formatDate(order.dueDate)}</dd>
+              <dt className="font-semibold">Delivery by</dt>
+              <dd>{formatDateTime(order.invoiceValidUntil)}</dd>
+              {order.deliveredAt && (
+                <>
+                  <dt className="font-semibold">Delivered</dt>
+                  <dd>{formatDateTime(order.deliveredAt)}</dd>
+                </>
+              )}
+              <dt className="font-semibold">Payment due</dt>
+              <dd className="font-bold text-[#2f2566]">
+                {order.dueDate
+                  ? formatDateTime(order.dueDate)
+                  : `${customer.creditDays ?? 15} days after delivery`}
+              </dd>
               <dt className="font-semibold">PO / LPO no.</dt>
               <dd>{order.poNumber}</dd>
               <dt className="font-semibold">Order no.</dt>

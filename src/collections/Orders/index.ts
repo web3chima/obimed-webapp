@@ -15,8 +15,10 @@ import {
   issueInvoiceOnPO,
   notifyOrderChanges,
   recordInvoiceInLedger,
+  scheduleDueDateOnDelivery,
+  settleOnDelivery,
 } from './hooks'
-import { requestQuoteEndpoint, submitPOEndpoint } from './endpoints'
+import { expireInvoicesEndpoint, requestQuoteEndpoint, submitPOEndpoint } from './endpoints'
 
 // Prices stay hidden from the customer until they have entered their PO number
 const pricesVisible: FieldAccess = ({ req: { user }, doc }) =>
@@ -31,6 +33,7 @@ export const orderStatusOptions = [
   { label: 'Delivered', value: 'delivered' },
   { label: 'Paid', value: 'paid' },
   { label: 'Cancelled', value: 'cancelled' },
+  { label: 'Expired (not delivered within 7 days)', value: 'expired' },
 ]
 
 // Quote requests that become invoiced orders. Customers never write to this collection
@@ -57,10 +60,21 @@ export const Orders: CollectionConfig<'orders'> = {
     },
   },
   defaultSort: '-createdAt',
-  endpoints: [requestQuoteEndpoint, submitPOEndpoint],
+  endpoints: [requestQuoteEndpoint, submitPOEndpoint, expireInvoicesEndpoint],
   hooks: {
-    beforeChange: [assignOrderNumber, calculateTotals, issueInvoiceOnPO, enforceOrderRules],
-    afterChange: [recordInvoiceInLedger, creditCancelledInvoice, notifyOrderChanges],
+    beforeChange: [
+      assignOrderNumber,
+      calculateTotals,
+      issueInvoiceOnPO,
+      enforceOrderRules,
+      scheduleDueDateOnDelivery,
+    ],
+    afterChange: [
+      recordInvoiceInLedger,
+      creditCancelledInvoice,
+      settleOnDelivery,
+      notifyOrderChanges,
+    ],
   },
   fields: [
     {
@@ -88,7 +102,7 @@ export const Orders: CollectionConfig<'orders'> = {
           required: true,
           admin: {
             description:
-              'Moves forward only. Priced, Invoiced and Paid are set automatically; you can set Delivered, or Cancelled (after invoicing, a credit note is added to the ledger).',
+              'Moves forward only. Priced, Invoiced, Expired and Paid are set automatically; you can set Delivered (within the invoice’s 7-day validity) or Cancelled (after invoicing, a credit note is added to the ledger).',
           },
         },
       ],
@@ -191,9 +205,32 @@ export const Orders: CollectionConfig<'orders'> = {
       admin: { position: 'sidebar', readOnly: true, date: { pickerAppearance: 'dayOnly' } },
     },
     {
-      name: 'dueDate',
+      name: 'invoiceValidUntil',
+      label: 'Invoice valid until',
       type: 'date',
-      admin: { position: 'sidebar', readOnly: true, date: { pickerAppearance: 'dayOnly' } },
+      admin: {
+        position: 'sidebar',
+        readOnly: true,
+        date: { pickerAppearance: 'dayAndTime' },
+        description: '7 days after the invoice is issued. Deliver before then.',
+      },
+    },
+    {
+      name: 'deliveredAt',
+      label: 'Delivered at',
+      type: 'date',
+      admin: { position: 'sidebar', readOnly: true, date: { pickerAppearance: 'dayAndTime' } },
+    },
+    {
+      name: 'dueDate',
+      label: 'Payment due',
+      type: 'date',
+      admin: {
+        position: 'sidebar',
+        readOnly: true,
+        date: { pickerAppearance: 'dayAndTime' },
+        description: "Set on delivery: delivered at + the customer's payment terms.",
+      },
     },
   ],
   timestamps: true,

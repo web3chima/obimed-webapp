@@ -1126,7 +1126,7 @@ export interface Product {
   createdAt: string;
 }
 /**
- * Quote requests from customers. Open one and follow the instructions at the top of the order.
+ * Quote requests from customers (or entered by staff for an approved customer). Open one and follow the instructions at the top.
  *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "orders".
@@ -1135,9 +1135,9 @@ export interface Order {
   id: number;
   orderNumber?: string | null;
   /**
-   * Moves forward only. Priced, Invoiced and Paid are set automatically; you can set Delivered or Cancelled.
+   * Moves forward only. Priced, Invoiced, Expired and Paid are set automatically; you can set Delivered (within the invoice’s 7-day validity) or Cancelled (after invoicing, a credit note is added to the ledger).
    */
-  status: 'submitted' | 'priced' | 'invoiced' | 'delivered' | 'paid' | 'cancelled';
+  status: 'submitted' | 'priced' | 'invoiced' | 'delivered' | 'paid' | 'cancelled' | 'expired';
   customer: number | Customer;
   items: {
     product: number | Product;
@@ -1155,6 +1155,14 @@ export interface Order {
   poNumber?: string | null;
   invoiceNumber?: string | null;
   invoiceDate?: string | null;
+  /**
+   * 7 days after the invoice is issued. Deliver before then.
+   */
+  invoiceValidUntil?: string | null;
+  deliveredAt?: string | null;
+  /**
+   * Set on delivery: delivered at + the customer's payment terms.
+   */
   dueDate?: string | null;
   updatedAt: string;
   createdAt: string;
@@ -1902,6 +1910,8 @@ export interface OrdersSelect<T extends boolean = true> {
   poNumber?: T;
   invoiceNumber?: T;
   invoiceDate?: T;
+  invoiceValidUntil?: T;
+  deliveredAt?: T;
   dueDate?: T;
   updatedAt?: T;
   createdAt?: T;

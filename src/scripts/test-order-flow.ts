@@ -508,12 +508,14 @@ try {
     'prices visible after PO',
     shown.total === priced.total && shown.items[0]?.unitPrice === 15000,
   )
-  const due = new Date(shown.dueDate!).getTime() - new Date(shown.invoiceDate!).getTime()
+  const validFor =
+    new Date(shown.invoiceValidUntil!).getTime() - new Date(shown.invoiceDate!).getTime()
   check(
-    'due date is 15 days after invoice',
-    Math.round(due / 86_400_000) === 15,
-    `${due / 86_400_000} days`,
+    'invoice is valid for 7 days',
+    Math.round(validFor / 86_400_000) === 7,
+    `${validFor / 86_400_000} days`,
   )
+  check('no payment due date before delivery', shown.dueDate == null, String(shown.dueDate))
   check('status is invoiced', shown.status === 'invoiced', shown.status)
   const invoicePage = await request(`/account/orders/${orderId}/invoice`, { cookie })
   check(
@@ -528,42 +530,18 @@ try {
   })
   check('second PO rejected', again.status === 409, `status ${again.status}`)
 
-  const ledger = await payload.find({
+  const beforeDelivery = await payload.find({
     collection: 'ledger-entries',
     where: { order: { equals: orderId } },
     overrideAccess: true,
   })
   check(
-    'one ledger entry for the invoice',
-    ledger.totalDocs === 1 &&
-      ledger.docs[0]?.amount === priced.total &&
-      ledger.docs[0]?.type === 'invoice',
-    `${ledger.totalDocs} entries`,
-  )
-  const myLedger = await payload.find({
-    collection: 'ledger-entries',
-    overrideAccess: false,
-    user: asCustomer,
-  })
-  check('customer can read own ledger', myLedger.totalDocs === 1)
-  const otherLedger = await payload.find({
-    collection: 'ledger-entries',
-    overrideAccess: false,
-    user: customerB,
-  })
-  check(
-    'other customer sees none of it',
-    otherLedger.totalDocs === 0,
-    String(otherLedger.totalDocs),
+    'nothing owed before delivery',
+    beforeDelivery.totalDocs === 0,
+    `${beforeDelivery.totalDocs} entries`,
   )
 
-  // 10. Delivery, part payment, then full payment → order marked paid automatically
-  await payload.update({
-    collection: 'orders',
-    id: orderId,
-    data: { status: 'delivered' },
-    overrideAccess: true,
-  })
+  // 10. Payment before delivery keeps the order invoiced; delivery sets the due date
   await payload.create({
     collection: 'ledger-entries',
     data: {
@@ -576,6 +554,66 @@ try {
     },
     overrideAccess: true,
   })
+  const prepaid = await payload.findByID({
+    collection: 'orders',
+    id: orderId,
+    overrideAccess: true,
+  })
+  check(
+    'payment before delivery keeps order invoiced',
+    prepaid.status === 'invoiced',
+    prepaid.status,
+  )
+  const deliver = await request(`/api/orders/${orderId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'delivered' }),
+    cookie: salesCookie,
+  })
+  const delivered = await payload.findByID({
+    collection: 'orders',
+    id: orderId,
+    overrideAccess: true,
+  })
+  const dueAfterDelivery =
+    new Date(delivered.dueDate!).getTime() - new Date(delivered.deliveredAt!).getTime()
+  check(
+    'sales staff mark delivered',
+    deliver.status === 200 && delivered.status === 'delivered',
+    delivered.status,
+  )
+  check(
+    'payment due 15 days after delivery',
+    Math.round(dueAfterDelivery / 86_400_000) === 15,
+    `${dueAfterDelivery / 86_400_000} days`,
+  )
+  const ledger = await payload.find({
+    collection: 'ledger-entries',
+    where: { and: [{ order: { equals: orderId } }, { type: { equals: 'invoice' } }] },
+    overrideAccess: true,
+  })
+  check(
+    'invoice recorded as owed on delivery',
+    ledger.totalDocs === 1 &&
+      ledger.docs[0]?.amount === priced.total &&
+      ledger.docs[0]?.date === delivered.deliveredAt,
+    `${ledger.totalDocs} entries`,
+  )
+  const myLedger = await payload.find({
+    collection: 'ledger-entries',
+    overrideAccess: false,
+    user: asCustomer,
+  })
+  check('customer can read own ledger', myLedger.totalDocs === 2, `${myLedger.totalDocs} entries`)
+  const otherLedger = await payload.find({
+    collection: 'ledger-entries',
+    overrideAccess: false,
+    user: customerB,
+  })
+  check(
+    'other customer sees none of it',
+    otherLedger.totalDocs === 0,
+    String(otherLedger.totalDocs),
+  )
   const partPaid = await payload.findByID({
     collection: 'orders',
     id: orderId,
@@ -597,7 +635,7 @@ try {
   const paid = await payload.findByID({ collection: 'orders', id: orderId, overrideAccess: true })
   check('full payment marks order paid', paid.status === 'paid', paid.status)
 
-  // 10b. Cancelling an invoiced order adds a credit note for what is still owed
+  // 10b. Cancelling before delivery: nothing was owed, so the ledger is untouched
   const second = await request('/api/orders/request', {
     method: 'POST',
     body: JSON.stringify({ items: [{ slug: 'xanthan-gum', quantity: 2 }] }),
@@ -626,15 +664,163 @@ try {
     body: JSON.stringify({ status: 'cancelled' }),
     cookie: salesCookie,
   })
-  const credit = await payload.find({
+  const secondLedger = await payload.find({
     collection: 'ledger-entries',
-    where: { and: [{ order: { equals: secondId } }, { type: { equals: 'credit-note' } }] },
+    where: { order: { equals: secondId } },
     overrideAccess: true,
   })
   check(
-    'cancelling an invoiced order adds a credit note',
-    cancel.status === 200 && credit.totalDocs === 1 && credit.docs[0]?.amount === 100000,
-    `status ${cancel.status}, ${credit.totalDocs} credit note(s)`,
+    'cancelling before delivery leaves the ledger untouched',
+    cancel.status === 200 && secondLedger.totalDocs === 0,
+    `status ${cancel.status}, ${secondLedger.totalDocs} entries`,
+  )
+
+  // 10c. An unpaid invoice not delivered within 7 days expires (daily cron)
+  const third = await request('/api/orders/request', {
+    method: 'POST',
+    body: JSON.stringify({ items: [{ slug: 'monosodium-glutamate', quantity: 5 }] }),
+    cookie,
+  })
+  const thirdId = third.body?.id as number
+  created.orders.push(thirdId)
+  const thirdDoc = await payload.findByID({
+    collection: 'orders',
+    id: thirdId,
+    overrideAccess: true,
+  })
+  await payload.update({
+    collection: 'orders',
+    id: thirdId,
+    data: { items: thirdDoc.items.map((item) => ({ ...item, unitPrice: 20000 })) },
+    overrideAccess: true,
+  })
+  await request(`/api/orders/${thirdId}/po`, {
+    method: 'POST',
+    body: JSON.stringify({ poNumber: 'PO-888' }),
+    cookie,
+  })
+  // Pretend 8 days have passed
+  await payload.db.updateOne({
+    collection: 'orders',
+    id: thirdId,
+    data: { invoiceValidUntil: new Date(Date.now() - 86_400_000).toISOString() },
+  })
+  const lateDelivery = await request(`/api/orders/${thirdId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'delivered' }),
+    cookie: salesCookie,
+  })
+  check(
+    'an expired invoice cannot be delivered',
+    lateDelivery.status === 400,
+    `status ${lateDelivery.status}`,
+  )
+  const cronDenied = await request('/api/orders/expire-invoices')
+  check(
+    'expiry job needs the cron secret',
+    cronDenied.status === 403,
+    `status ${cronDenied.status}`,
+  )
+  const cron = await fetch(`${BASE}/api/orders/expire-invoices`, {
+    headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` },
+  }).then((res) => res.json())
+  const thirdAfter = await payload.findByID({
+    collection: 'orders',
+    id: thirdId,
+    overrideAccess: true,
+  })
+  const thirdLedger = await payload.find({
+    collection: 'ledger-entries',
+    where: { order: { equals: thirdId } },
+    overrideAccess: true,
+  })
+  check(
+    'an expired invoice leaves the ledger untouched',
+    thirdLedger.totalDocs === 0,
+    `${thirdLedger.totalDocs} entries`,
+  )
+  const thirdInvoice = thirdAfter.invoiceNumber!
+
+  // 10d. A part-paid invoice past its window doesn't expire; cancelling after delivery credits it
+  const fourth = await request('/api/orders/request', {
+    method: 'POST',
+    body: JSON.stringify({ items: [{ slug: 'corn-starch', quantity: 4 }] }),
+    cookie,
+  })
+  const fourthId = fourth.body?.id as number
+  created.orders.push(fourthId)
+  const fourthDoc = await payload.findByID({
+    collection: 'orders',
+    id: fourthId,
+    overrideAccess: true,
+  })
+  await payload.update({
+    collection: 'orders',
+    id: fourthId,
+    data: { items: fourthDoc.items.map((item) => ({ ...item, unitPrice: 25000 })) },
+    overrideAccess: true,
+  })
+  await request(`/api/orders/${fourthId}/po`, {
+    method: 'POST',
+    body: JSON.stringify({ poNumber: 'PO-999' }),
+    cookie,
+  })
+  await payload.create({
+    collection: 'ledger-entries',
+    data: {
+      customer: aId,
+      order: fourthId,
+      type: 'payment',
+      date: new Date().toISOString(),
+      amount: 30000,
+      reference: 'TRF-4',
+    },
+    overrideAccess: true,
+  })
+  await payload.db.updateOne({
+    collection: 'orders',
+    id: fourthId,
+    data: { invoiceValidUntil: new Date(Date.now() - 86_400_000).toISOString() },
+  })
+  await fetch(`${BASE}/api/orders/expire-invoices`, {
+    headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` },
+  })
+  const fourthAfterCron = await payload.findByID({
+    collection: 'orders',
+    id: fourthId,
+    overrideAccess: true,
+  })
+  check(
+    'a part-paid invoice does not expire',
+    fourthAfterCron.status === 'invoiced',
+    fourthAfterCron.status,
+  )
+  const lateButPaid = await request(`/api/orders/${fourthId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'delivered' }),
+    cookie: salesCookie,
+  })
+  check(
+    'a part-paid invoice can still be delivered late',
+    lateButPaid.status === 200,
+    `status ${lateButPaid.status}`,
+  )
+  const cancelAfterDelivery = await request(`/api/orders/${fourthId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'cancelled' }),
+    cookie: salesCookie,
+  })
+  const fourthCredit = await payload.find({
+    collection: 'ledger-entries',
+    where: { and: [{ order: { equals: fourthId } }, { type: { equals: 'credit-note' } }] },
+    overrideAccess: true,
+  })
+  check(
+    'cancelling after delivery credits the unpaid amount',
+    cancelAfterDelivery.status === 200 &&
+      fourthCredit.totalDocs === 1 &&
+      fourthCredit.docs[0]?.amount === 4 * 25000 - 30000,
+    `status ${cancelAfterDelivery.status}, ${fourthCredit.totalDocs} credit note(s)`,
   )
 
   // 11. Signing out revokes the session: the old cookie no longer works
@@ -659,6 +845,8 @@ try {
     ['customer told delivered', `Order ${orderNumber} delivered`],
     ['customer sent payment receipt', 'Payment received'],
     ['customer told paid in full', `Invoice ${invoiceNumber} paid in full`],
+    ['customer told invoice expired', `Invoice ${thirdInvoice} has expired`],
+    ['staff told invoice expired', `Invoice ${thirdInvoice} expired (`],
   ]
   for (const [label, subject] of expected) check(`email: ${label}`, await emailed(subject), subject)
 } finally {

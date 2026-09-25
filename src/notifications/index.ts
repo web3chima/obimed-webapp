@@ -2,7 +2,7 @@ import type { Payload } from 'payload'
 
 import type { Customer, Order } from '@/payload-types'
 
-import { formatDate, formatNaira } from '@/utilities/format'
+import { formatDateTime, formatNaira } from '@/utilities/format'
 import { getServerSideURL } from '@/utilities/getURL'
 import { siteConfig } from '@/utilities/siteConfig'
 
@@ -155,7 +155,7 @@ export const notifyInvoiceIssued = async (payload: Payload, order: Order) => {
     heading: `PO ${order.poNumber} received`,
     lines: [
       `${customer?.company} submitted PO ${order.poNumber} for ${order.orderNumber}.`,
-      `Invoice ${order.invoiceNumber} for ${formatNaira(order.total)} was issued, due ${formatDate(order.dueDate)}.`,
+      `Invoice ${order.invoiceNumber} for ${formatNaira(order.total)} was issued. Deliver by ${formatDateTime(order.invoiceValidUntil)}; if undelivered and unpaid by then, it expires.`,
     ],
     action: { label: 'Open the order', url: adminLink('orders', order.id) },
   })
@@ -166,7 +166,8 @@ export const notifyInvoiceIssued = async (payload: Payload, order: Order) => {
       heading: `Invoice ${order.invoiceNumber}`,
       lines: [
         `Thank you for PO ${order.poNumber}. Your invoice for ${formatNaira(order.total)} is ready.`,
-        `Payment is due by ${formatDate(order.dueDate)}. Please quote ${order.invoiceNumber} as your payment reference.`,
+        `We will deliver by ${formatDateTime(order.invoiceValidUntil)}. Payment is due ${customer.creditDays ?? 15} days after delivery; we will confirm the exact date when your goods arrive.`,
+        `Please quote ${order.invoiceNumber} as your payment reference.`,
       ],
       action: { label: 'View & print invoice', url: `${orderLink(order)}/invoice` },
     })
@@ -178,7 +179,8 @@ const statusMessages: Partial<Record<Order['status'], (order: Order) => Omit<Mes
     subject: `Order ${order.orderNumber} delivered`,
     heading: 'Your order has been delivered',
     lines: [
-      `Order ${order.orderNumber} (PO ${order.poNumber}) has been delivered.`,
+      `Order ${order.orderNumber} (PO ${order.poNumber}) was delivered on ${formatDateTime(order.deliveredAt)}.`,
+      `Payment for invoice ${order.invoiceNumber} (${formatNaira(order.total)}) is due by ${formatDateTime(order.dueDate)}.`,
       'Please inspect the goods. Report quantity issues within 7 days and quality issues within 15 days.',
     ],
   }),
@@ -189,6 +191,14 @@ const statusMessages: Partial<Record<Order['status'], (order: Order) => Omit<Mes
       `We have received full payment for invoice ${order.invoiceNumber}. This order is complete.`,
     ],
   }),
+  expired: (order) => ({
+    subject: `Invoice ${order.invoiceNumber} has expired`,
+    heading: 'Your invoice has expired',
+    lines: [
+      `Invoice ${order.invoiceNumber} for order ${order.orderNumber} was valid for delivery until ${formatDateTime(order.invoiceValidUntil)}. The goods were not delivered in that time, so it has expired. You owe nothing on it.`,
+      'Please submit a new quote request, or contact us to arrange delivery.',
+    ],
+  }),
   cancelled: (order) => ({
     subject: `Order ${order.orderNumber} cancelled`,
     heading: 'Your order has been cancelled',
@@ -197,6 +207,19 @@ const statusMessages: Partial<Record<Order['status'], (order: Order) => Omit<Mes
 }
 
 export const notifyStatusChange = async (payload: Payload, order: Order) => {
+  if (order.status === 'expired') {
+    const company = (await customerOf(payload, order))?.company ?? 'a customer'
+    await sendNotification(payload, {
+      to: await staffEmails(payload),
+      subject: `Invoice ${order.invoiceNumber} expired (${company})`,
+      heading: `Invoice ${order.invoiceNumber} expired`,
+      lines: [
+        `${order.orderNumber} for ${company} was not delivered within the invoice's 7-day validity.`,
+        'No payment had been received, so the order is now Expired. Nothing was owed, so the ledger is unchanged.',
+      ],
+      action: { label: 'Open the order', url: adminLink('orders', order.id) },
+    })
+  }
   const build = statusMessages[order.status]
   const customer = build ? await customerOf(payload, order) : null
   if (!build || !customer) return

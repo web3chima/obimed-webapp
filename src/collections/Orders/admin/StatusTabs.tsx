@@ -10,6 +10,7 @@ const tabs = [
   { label: 'Delivered', status: 'delivered' },
   { label: 'Paid', status: 'paid' },
   { label: 'Cancelled', status: 'cancelled' },
+  { label: 'Expired', status: 'expired' },
   { label: 'All', status: '' },
 ]
 

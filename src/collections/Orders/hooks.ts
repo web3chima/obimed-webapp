@@ -63,7 +63,35 @@ export const calculateTotals: CollectionBeforeChangeHook<Order> = ({ data }) => 
   return data
 }
 
-// Entering a PO number on a priced order issues the invoice
+export const INVOICE_VALIDITY_DAYS = 7
+
+const addDays = (date: Date, days: number) => {
+  const result = new Date(date)
+  result.setDate(result.getDate() + days)
+  return result
+}
+
+export const invoiceHasLapsed = (order: Pick<Order, 'status' | 'invoiceValidUntil'>) =>
+  order.status === 'invoiced' &&
+  Boolean(order.invoiceValidUntil) &&
+  new Date(order.invoiceValidUntil!) < new Date()
+
+// Any payment received on an order stops its invoice expiring
+export const hasPayments = async (
+  payload: Payload,
+  orderId: number,
+  req?: Parameters<CollectionAfterChangeHook>[0]['req'],
+) => {
+  const { totalDocs } = await payload.count({
+    collection: 'ledger-entries',
+    where: { and: [{ order: { equals: orderId } }, { type: { equals: 'payment' } }] },
+    overrideAccess: true,
+    req,
+  })
+  return totalDocs > 0
+}
+
+// Entering a PO number on a priced order issues the invoice, valid for 7 days until delivery
 export const issueInvoiceOnPO: CollectionBeforeChangeHook<Order> = async ({
   data,
   operation,
@@ -76,37 +104,28 @@ export const issueInvoiceOnPO: CollectionBeforeChangeHook<Order> = async ({
     return data
   }
 
-  const customerId = typeof data.customer === 'object' ? data.customer?.id : data.customer
-  const customer = customerId
-    ? await req.payload.findByID({
-        collection: 'customers',
-        id: customerId,
-        depth: 0,
-        overrideAccess: true,
-        req,
-      })
-    : null
-  const creditDays = customer?.creditDays ?? 15
-
   const invoiceDate = new Date()
-  const dueDate = new Date(invoiceDate)
-  dueDate.setDate(dueDate.getDate() + creditDays)
 
   data.poNumber = poNumber
   data.invoiceNumber = await nextNumber(req.payload, 'invoiceNumber', 'INV')
   data.invoiceDate = invoiceDate.toISOString()
-  data.dueDate = dueDate.toISOString()
+  data.invoiceValidUntil = addDays(invoiceDate, INVOICE_VALIDITY_DAYS).toISOString()
+  // The payment due date is set when the goods are delivered
+  data.dueDate = null
   data.status = 'invoiced'
   return data
 }
 
-// Record each newly issued invoice in the customer's ledger (once)
+// Record the invoice in the customer's ledger when its goods are delivered (once)
 export const recordInvoiceInLedger: CollectionAfterChangeHook<Order> = async ({
   doc,
   previousDoc,
   req,
 }) => {
-  if (!doc.invoiceNumber || previousDoc?.invoiceNumber) return doc
+  // The invoice becomes owed when the goods are delivered, not when it is issued
+  if (doc.status !== 'delivered' || previousDoc?.status === 'delivered' || !doc.invoiceNumber) {
+    return doc
+  }
 
   const customer = typeof doc.customer === 'object' ? doc.customer.id : doc.customer
   await req.payload.create({
@@ -116,7 +135,7 @@ export const recordInvoiceInLedger: CollectionAfterChangeHook<Order> = async ({
       order: doc.id,
       type: 'invoice',
       amount: doc.total ?? 0,
-      date: doc.invoiceDate ?? new Date().toISOString(),
+      date: doc.deliveredAt ?? new Date().toISOString(),
       reference: doc.invoiceNumber,
       note: `PO ${doc.poNumber}`,
     },
@@ -157,15 +176,17 @@ export const notifyOrderChanges: CollectionAfterChangeHook<Order> = async ({
 }
 
 // Status only moves forward, and only the right event can move it:
-// Priced ← all items priced, Invoiced ← PO entered, Paid ← ledger settles the invoice.
-// Staff may set Delivered (after invoicing) or Cancelled (a credit note is added once invoiced).
+// Priced ← all items priced, Invoiced ← PO entered, Expired ← invoice not delivered within
+// 7 days, Paid ← fully paid after delivery. Staff may set Delivered (while the invoice is
+// valid) or Cancelled (a credit note is added once invoiced).
 const allowedNext: Record<Order['status'], Order['status'][]> = {
   submitted: ['priced', 'cancelled'],
   priced: ['submitted', 'invoiced', 'cancelled'],
-  invoiced: ['delivered', 'paid', 'cancelled'],
+  invoiced: ['delivered', 'cancelled', 'expired'],
   delivered: ['paid', 'cancelled'],
   paid: [],
   cancelled: [],
+  expired: [],
 }
 
 const reject = (message: string) => {
@@ -214,6 +235,18 @@ export const enforceOrderRules: CollectionBeforeChangeHook<Order> = async ({
     if (after === 'paid' && !context?.settledByLedger) {
       reject('Record the payment in Sales → Ledger; the order becomes Paid once fully paid.')
     }
+    if (after === 'expired' && !context?.expiredBySchedule) {
+      reject('Invoices expire automatically when goods are not delivered within 7 days.')
+    }
+    if (
+      after === 'delivered' &&
+      invoiceHasLapsed(originalDoc) &&
+      !(await hasPayments(req.payload, originalDoc.id, req))
+    ) {
+      reject(
+        `Invoice ${originalDoc.invoiceNumber} expired on its 7-day validity and can no longer be delivered. The customer can submit a new request.`,
+      )
+    }
   }
 
   // Products and quantities: only a super admin, and only while the order awaits prices
@@ -246,13 +279,15 @@ export const enforceOrderRules: CollectionBeforeChangeHook<Order> = async ({
   return data
 }
 
-// Cancelling an invoiced order credits whatever is still owed on it, so the balance is right
+// Cancelling a delivered order credits whatever is still owed, so the balance is right
 export const creditCancelledInvoice: CollectionAfterChangeHook<Order> = async ({
   doc,
   previousDoc,
   req,
 }) => {
-  if (doc.status !== 'cancelled' || previousDoc?.status === 'cancelled' || !doc.invoiceNumber) {
+  // Only a delivered invoice was ever owed; before delivery nothing needs reversing and any
+  // payment simply stays as credit on the customer's account
+  if (doc.status !== 'cancelled' || previousDoc?.status !== 'delivered') {
     return doc
   }
   const outstanding = await orderBalance(req.payload, doc.id, req)
@@ -266,11 +301,100 @@ export const creditCancelledInvoice: CollectionAfterChangeHook<Order> = async ({
         amount: outstanding,
         date: new Date().toISOString(),
         reference: `CN-${doc.invoiceNumber}`,
-        note: `Cancellation of ${doc.invoiceNumber}`,
+        note: `Cancellation of ${doc.invoiceNumber} after delivery`,
       },
       overrideAccess: true,
       req,
     })
   }
   return doc
+}
+
+// Marking an order delivered records when, and starts the payment terms from that moment
+export const scheduleDueDateOnDelivery: CollectionBeforeChangeHook<Order> = async ({
+  data,
+  originalDoc,
+  req,
+}) => {
+  if (data.status !== 'delivered' || originalDoc?.status === 'delivered') return data
+
+  const customerId = typeof data.customer === 'object' ? data.customer?.id : data.customer
+  const customer = customerId
+    ? await req.payload
+        .findByID({ collection: 'customers', id: customerId, depth: 0, overrideAccess: true, req })
+        .catch(() => null)
+    : null
+
+  const deliveredAt = new Date()
+  data.deliveredAt = deliveredAt.toISOString()
+  data.dueDate = addDays(deliveredAt, customer?.creditDays ?? 15).toISOString()
+  return data
+}
+
+// An order becomes Paid once it is delivered and nothing is owed on it (payments may arrive
+// before or after delivery)
+export const markPaidWhenSettled = async (
+  payload: Payload,
+  orderId: number,
+  req?: Parameters<CollectionAfterChangeHook>[0]['req'],
+) => {
+  const order = await payload.findByID({
+    collection: 'orders',
+    id: orderId,
+    depth: 0,
+    overrideAccess: true,
+    req,
+  })
+  if (order.status !== 'delivered') return
+  if ((await orderBalance(payload, orderId, req)) > 0) return
+  await payload.update({
+    collection: 'orders',
+    id: orderId,
+    data: { status: 'paid' },
+    overrideAccess: true,
+    context: { settledByLedger: true },
+    req,
+  })
+}
+
+export const settleOnDelivery: CollectionAfterChangeHook<Order> = async ({
+  doc,
+  previousDoc,
+  req,
+}) => {
+  if (doc.status === 'delivered' && previousDoc?.status !== 'delivered') {
+    await markPaidWhenSettled(req.payload, doc.id, req)
+  }
+  return doc
+}
+
+// Expire unpaid invoices whose goods weren't delivered within 7 days (run daily by Vercel Cron).
+// Nothing to reverse: an invoice only becomes owed on delivery.
+export const expireLapsedInvoices = async (payload: Payload) => {
+  const { docs } = await payload.find({
+    collection: 'orders',
+    where: {
+      and: [
+        { status: { equals: 'invoiced' } },
+        { invoiceValidUntil: { less_than: new Date().toISOString() } },
+      ],
+    },
+    limit: 200,
+    pagination: false,
+    depth: 0,
+    overrideAccess: true,
+  })
+  const expired: string[] = []
+  for (const order of docs) {
+    if (await hasPayments(payload, order.id)) continue
+    await payload.update({
+      collection: 'orders',
+      id: order.id,
+      data: { status: 'expired' },
+      overrideAccess: true,
+      context: { expiredBySchedule: true },
+    })
+    expired.push(order.orderNumber!)
+  }
+  return expired
 }

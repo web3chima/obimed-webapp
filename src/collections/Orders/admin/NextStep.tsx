@@ -23,6 +23,16 @@ export const NextStep: React.FC = () => {
     (_, i) => typeof fields[`items.${i}.unitPrice`]?.value !== 'number',
   ).length
   const invoiceNumber = fields.invoiceNumber?.value as string | undefined
+  const validUntil = fields.invoiceValidUntil?.value as string | undefined
+  const validText = validUntil
+    ? new Date(validUntil).toLocaleString('en-GB', {
+        day: 'numeric',
+        month: 'long',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: 'Africa/Lagos',
+      })
+    : 'its 7-day validity'
 
   let title: string
   let text: string
@@ -40,13 +50,17 @@ export const NextStep: React.FC = () => {
     text =
       'The customer has been asked to enter their PO number on their account, which issues the invoice. If they sent the PO to you directly, type it in “PO / LPO number” (right) and Save.'
   } else if (status === 'invoiced') {
-    title = `Invoiced${invoiceNumber ? ` (${invoiceNumber})` : ''}`
+    title = `Invoiced${invoiceNumber ? ` (${invoiceNumber})` : ''}: deliver by ${validText}`
     text =
-      'When the goods have been delivered, set Status to Delivered and Save. Record payments in Sales → Ledger (Type: Payment received). Cancelling now adds a credit note for the unpaid amount.'
+      'You have 7 days to deliver. When the goods are delivered, set Status to Delivered and Save: the invoice is then recorded as owed and payment is due after the customer’s terms from that moment. If it is neither delivered nor paid in 7 days it expires automatically. Payments received before delivery stop it expiring.'
   } else if (status === 'delivered') {
     title = 'Delivered: awaiting payment'
     text =
-      'Record each payment in Sales → Ledger (Type: Payment received, choose this order). The order becomes Paid automatically once fully paid.'
+      'Payment is due by the date in “Payment due” (right). Record each payment in Sales → Ledger (Type: Payment received, choose this order). The order becomes Paid automatically once fully paid.'
+  } else if (status === 'expired') {
+    title = 'Invoice expired'
+    text =
+      'The goods were not delivered within 7 days and nothing had been paid, so the invoice expired. It was never owed, so the ledger is unchanged. The customer can submit a new request.'
   } else if (status === 'paid') {
     title = 'Complete'
     text = 'This order is paid in full.'

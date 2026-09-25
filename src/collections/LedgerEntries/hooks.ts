@@ -3,10 +3,12 @@ import type { CollectionAfterChangeHook } from 'payload'
 import type { LedgerEntry } from '@/payload-types'
 
 import { notifyPaymentReceived } from '@/notifications'
-import { customerBalance, orderBalance } from './balance'
+import { markPaidWhenSettled } from '@/collections/Orders/hooks'
 
-// After a payment or credit note: mark a fully settled order as paid (which emails the
-// customer), otherwise send a payment receipt with the remaining balance
+import { customerBalance } from './balance'
+
+// After a payment or credit note: a delivered order that is now fully settled becomes Paid
+// (which emails the customer); otherwise send a payment receipt with the remaining balance
 export const settleOrder: CollectionAfterChangeHook<LedgerEntry> = async ({
   doc,
   operation,
@@ -16,6 +18,7 @@ export const settleOrder: CollectionAfterChangeHook<LedgerEntry> = async ({
 
   const orderId = typeof doc.order === 'object' ? doc.order?.id : doc.order
   if (orderId) {
+    await markPaidWhenSettled(req.payload, orderId, req)
     const order = await req.payload.findByID({
       collection: 'orders',
       id: orderId,
@@ -23,18 +26,8 @@ export const settleOrder: CollectionAfterChangeHook<LedgerEntry> = async ({
       overrideAccess: true,
       req,
     })
-    const settled = (await orderBalance(req.payload, orderId, req)) <= 0
-    if (settled && ['invoiced', 'delivered'].includes(order.status)) {
-      await req.payload.update({
-        collection: 'orders',
-        id: orderId,
-        data: { status: 'paid' },
-        overrideAccess: true,
-        context: { settledByLedger: true },
-        req,
-      })
-      return doc
-    }
+    // The paid-in-full email covers this payment
+    if (order.status === 'paid') return doc
   }
 
   if (doc.type === 'payment') {

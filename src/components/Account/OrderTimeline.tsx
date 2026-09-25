@@ -15,10 +15,12 @@ const steps: { status: Order['status']; label: string }[] = [
 
 // Where the order is in its life, from request to payment
 export const OrderTimeline: React.FC<{ status: Order['status'] }> = ({ status }) => {
-  if (status === 'cancelled') {
+  if (status === 'cancelled' || status === 'expired') {
     return (
       <p className="rounded-xl border border-border bg-card px-5 py-4 font-semibold">
-        This order was cancelled.
+        {status === 'cancelled'
+          ? 'This order was cancelled.'
+          : 'This invoice expired because the goods were not delivered within 7 days. You owe nothing on it; please submit a new request.'}
       </p>
     )
   }

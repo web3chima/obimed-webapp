@@ -1,6 +1,9 @@
 import type { Endpoint, PayloadRequest } from 'payload'
 
+import { hasRole } from '@/access/roles'
 import { getCustomerFromHeaders } from '@/auth/customerSession'
+
+import { expireLapsedInvoices } from './hooks'
 
 const MAX_ITEMS = 50
 const MAX_TEXT = 500
@@ -119,5 +122,20 @@ export const submitPOEndpoint: Endpoint = {
     })
 
     return Response.json({ id: updated.id, invoiceNumber: updated.invoiceNumber })
+  },
+}
+
+// GET /api/orders/expire-invoices — expires invoices not delivered within 7 days.
+// Called daily by Vercel Cron (Authorization: Bearer CRON_SECRET) or by sales staff.
+export const expireInvoicesEndpoint: Endpoint = {
+  path: '/expire-invoices',
+  method: 'get',
+  handler: async (req) => {
+    const secret = process.env.CRON_SECRET
+    const fromCron = Boolean(secret) && req.headers.get('authorization') === `Bearer ${secret}`
+    if (!fromCron && !hasRole(req.user, 'sales')) return error('Not allowed.', 403)
+
+    const expired = await expireLapsedInvoices(req.payload)
+    return Response.json({ expired })
   },
 }

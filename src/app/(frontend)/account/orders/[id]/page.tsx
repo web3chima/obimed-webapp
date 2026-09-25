@@ -9,7 +9,7 @@ import { OrderStatus } from '@/components/Account/OrderStatus'
 import { OrderTimeline } from '@/components/Account/OrderTimeline'
 import { POForm } from '@/components/Account/POForm'
 import { Button } from '@/components/ui/button'
-import { formatDate, formatNaira } from '@/utilities/format'
+import { formatDate, formatDateTime, formatNaira } from '@/utilities/format'
 import { getCustomer } from '@/utilities/getCustomer'
 import { getCustomerOrder } from '@/utilities/getCustomerOrder'
 
@@ -67,8 +67,20 @@ export default async function OrderPage({ params }: Args) {
           <div>
             <p className="font-heading font-bold text-heading">Invoice {order.invoiceNumber}</p>
             <p className="text-sm">
-              PO {order.poNumber} · Issued {formatDate(order.invoiceDate)} · Due{' '}
-              <strong>{formatDate(order.dueDate)}</strong>
+              PO {order.poNumber} · Issued {formatDate(order.invoiceDate)}
+            </p>
+            <p className="text-sm">
+              {order.dueDate ? (
+                <>
+                  Delivered {formatDateTime(order.deliveredAt)} · Payment due{' '}
+                  <strong>{formatDateTime(order.dueDate)}</strong>
+                </>
+              ) : order.status === 'invoiced' ? (
+                <>
+                  Delivery by <strong>{formatDateTime(order.invoiceValidUntil)}</strong> · Payment
+                  due {customer.creditDays ?? 15} days after delivery
+                </>
+              ) : null}
             </p>
           </div>
           <Button asChild size="lg">

@@ -11,6 +11,7 @@ const labels: Record<Order['status'], string> = {
   delivered: 'Delivered',
   paid: 'Paid',
   cancelled: 'Cancelled',
+  expired: 'Invoice expired',
 }
 
 const tones: Record<Order['status'], string> = {
@@ -20,6 +21,7 @@ const tones: Record<Order['status'], string> = {
   delivered: 'bg-accent text-accent-foreground',
   paid: 'bg-brand-green text-[#241c52]',
   cancelled: 'bg-muted text-muted-foreground line-through',
+  expired: 'bg-muted text-muted-foreground',
 }
 
 export const OrderStatus: React.FC<{ status: Order['status'] }> = ({ status }) => (
