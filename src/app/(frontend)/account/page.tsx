@@ -54,10 +54,13 @@ export default async function AccountPage() {
 
       <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <div className="rounded-2xl border border-border bg-card p-5">
-          <p className="text-sm text-muted-foreground">Outstanding balance</p>
-          <p className="mt-1 font-heading text-2xl font-bold text-heading">
-            {formatNaira(balance)}
+          <p className="text-sm text-muted-foreground">
+            {balance < 0 ? 'Credit on your account' : 'Outstanding balance'}
           </p>
+          <p className="mt-1 font-heading text-2xl font-bold text-heading">
+            {formatNaira(Math.abs(balance))}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">For delivered orders</p>
         </div>
         <div className="rounded-2xl border border-border bg-card p-5">
           <p className="text-sm text-muted-foreground">Payment terms</p>

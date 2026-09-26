@@ -1,10 +1,13 @@
 import type { Metadata } from 'next'
 
+import configPromise from '@payload-config'
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
+import { getPayload } from 'payload'
 import React from 'react'
 import { ChevronLeftIcon, FileTextIcon } from 'lucide-react'
 
+import { orderAccount } from '@/collections/LedgerEntries/balance'
 import { OrderStatus } from '@/components/Account/OrderStatus'
 import { OrderTimeline } from '@/components/Account/OrderTimeline'
 import { POForm } from '@/components/Account/POForm'
@@ -24,6 +27,9 @@ export default async function OrderPage({ params }: Args) {
   if (!order) notFound()
 
   const showPrices = Boolean(order.poNumber)
+  const payload = await getPayload({ config: configPromise })
+  const account = order.invoiceNumber ? await orderAccount(payload, order.id) : null
+  const owedNow = order.status === 'delivered' || order.status === 'paid'
 
   return (
     <div className="container pt-8 pb-24">
@@ -89,6 +95,36 @@ export default async function OrderPage({ params }: Args) {
               View & print invoice
             </Link>
           </Button>
+        </div>
+      )}
+
+      {account && account.received.length > 0 && (
+        <div className="mb-8 rounded-2xl border border-border bg-card p-6">
+          <h2 className="mb-3 font-heading font-bold text-heading">Payments</h2>
+          <ul className="divide-y divide-border text-sm">
+            {account.received.map((entry) => (
+              <li className="flex justify-between gap-4 py-2" key={entry.id}>
+                <span>
+                  {formatDate(entry.date)} ·{' '}
+                  {entry.type === 'payment' ? 'Payment received' : 'Credit note'}
+                  {entry.reference && ` (${entry.reference})`}
+                </span>
+                <span className="font-semibold">{formatNaira(entry.amount)}</span>
+              </li>
+            ))}
+          </ul>
+          <dl className="mt-3 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 border-t border-border pt-3 text-sm">
+            <dt>Invoice total</dt>
+            <dd className="text-right">{formatNaira(order.total)}</dd>
+            <dt>Paid</dt>
+            <dd className="text-right">{formatNaira(account.paid)}</dd>
+            <dt className="font-heading font-bold">
+              {owedNow ? 'Balance due' : 'Balance due on delivery'}
+            </dt>
+            <dd className="text-right font-heading font-bold">
+              {formatNaira(Math.max((order.total ?? 0) - account.paid, 0))}
+            </dd>
+          </dl>
         </div>
       )}
 

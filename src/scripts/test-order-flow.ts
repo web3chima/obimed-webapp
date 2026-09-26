@@ -10,6 +10,8 @@ import { getPayload } from 'payload'
 
 import config from '@payload-config'
 
+import { formatNaira } from '@/utilities/format'
+
 const BASE = process.env.TEST_BASE_URL || 'http://localhost:3000'
 const payload = await getPayload({ config })
 
@@ -202,7 +204,18 @@ try {
     },
     overrideAccess: true,
   })
-  created.users.push(sales.id, editor.id)
+  const superAdmin = await payload.create({
+    collection: 'users',
+    data: {
+      email: `super-${stamp}@example.com`,
+      password: staffPassword,
+      name: 'Test Super Admin',
+      role: 'super-admin',
+    },
+    overrideAccess: true,
+  })
+  created.users.push(sales.id, editor.id, superAdmin.id)
+  const superCookie = await staffSignIn(superAdmin.email, staffPassword)
   const salesCookie = await staffSignIn(sales.email, staffPassword)
   const editorCookie = await staffSignIn(editor.email, staffPassword)
   check('staff sign in', Boolean(salesCookie && editorCookie))
@@ -635,6 +648,103 @@ try {
   const paid = await payload.findByID({ collection: 'orders', id: orderId, overrideAccess: true })
   check('full payment marks order paid', paid.status === 'paid', paid.status)
 
+  // 10a. The ledger: invoice entries are locked; editing or removing a payment re-checks the order
+  const invoiceEntry = ledger.docs[0]!
+  await request(`/api/ledger-entries/${invoiceEntry.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ type: 'payment', amount: 1 }),
+    cookie: salesCookie,
+  })
+  const invoiceAfterEdit = await payload.findByID({
+    collection: 'ledger-entries',
+    id: invoiceEntry.id,
+    overrideAccess: true,
+  })
+  check(
+    'staff cannot turn the invoice entry into a payment',
+    invoiceAfterEdit.type === 'invoice' && invoiceAfterEdit.amount === invoiceEntry.amount,
+    `${invoiceAfterEdit.type} ${invoiceAfterEdit.amount}`,
+  )
+  const deleteInvoice = await request(`/api/ledger-entries/${invoiceEntry.id}`, {
+    method: 'DELETE',
+    cookie: salesCookie,
+  })
+  const invoiceStillThere = await payload
+    .findByID({ collection: 'ledger-entries', id: invoiceEntry.id, overrideAccess: true })
+    .catch(() => null)
+  check(
+    'staff cannot delete the invoice entry',
+    deleteInvoice.status >= 400 && Boolean(invoiceStillThere),
+    `status ${deleteInvoice.status}`,
+  )
+  const fakeInvoice = await request('/api/ledger-entries', {
+    method: 'POST',
+    body: JSON.stringify({
+      customer: aId,
+      order: orderId,
+      type: 'invoice',
+      amount: 5,
+      date: new Date().toISOString(),
+    }),
+    cookie: salesCookie,
+  })
+  check(
+    'staff cannot add invoice entries by hand',
+    fakeInvoice.status === 400,
+    `status ${fakeInvoice.status}`,
+  )
+  const wrongCustomer = await request('/api/ledger-entries', {
+    method: 'POST',
+    body: JSON.stringify({
+      customer: customerB.id,
+      order: orderId,
+      type: 'payment',
+      amount: 5,
+      date: new Date().toISOString(),
+    }),
+    cookie: salesCookie,
+  })
+  check(
+    "a payment can't be put on another customer's order",
+    wrongCustomer.status === 400,
+    `status ${wrongCustomer.status}`,
+  )
+  const secondPayment = (
+    await payload.find({
+      collection: 'ledger-entries',
+      where: { reference: { equals: 'TRF-2' } },
+      overrideAccess: true,
+    })
+  ).docs[0]!
+  await request(`/api/ledger-entries/${secondPayment.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ amount: 50000 }),
+    cookie: salesCookie,
+  })
+  const reopened = await payload.findByID({
+    collection: 'orders',
+    id: orderId,
+    overrideAccess: true,
+  })
+  check(
+    'correcting a payment down reopens a paid order',
+    reopened.status === 'delivered' && reopened.deliveredAt === delivered.deliveredAt,
+    reopened.status,
+  )
+  const balancePage = await request(`/account/orders/${orderId}`, { cookie })
+  check(
+    'customer sees the balance due',
+    balancePage.text.includes('Balance due') &&
+      balancePage.text.includes(formatNaira(priced.total! - 150000)),
+  )
+  await request(`/api/ledger-entries/${secondPayment.id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ amount: priced.total! - 100000 }),
+    cookie: salesCookie,
+  })
+  const repaid = await payload.findByID({ collection: 'orders', id: orderId, overrideAccess: true })
+  check('correcting it back marks the order paid again', repaid.status === 'paid', repaid.status)
+
   // 10b. Cancelling before delivery: nothing was owed, so the ledger is untouched
   const second = await request('/api/orders/request', {
     method: 'POST',
@@ -805,6 +915,46 @@ try {
     lateButPaid.status === 200,
     `status ${lateButPaid.status}`,
   )
+  const salesMarksPaid = await request(`/api/orders/${fourthId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'paid' }),
+    cookie: salesCookie,
+  })
+  check(
+    'sales staff cannot mark a delivered order paid by hand',
+    salesMarksPaid.status === 400,
+    `status ${salesMarksPaid.status}`,
+  )
+  const superMarksPaid = await request(`/api/orders/${fourthId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'paid' }),
+    cookie: superCookie,
+  })
+  const manualPayment = await payload.find({
+    collection: 'ledger-entries',
+    where: { and: [{ order: { equals: fourthId } }, { type: { equals: 'payment' } }] },
+    sort: '-createdAt',
+    overrideAccess: true,
+  })
+  check(
+    'super admin marks a delivered order paid, recording the outstanding payment',
+    superMarksPaid.status === 200 &&
+      manualPayment.totalDocs === 2 &&
+      manualPayment.docs[0]?.amount === 4 * 25000 - 30000,
+    `status ${superMarksPaid.status}, ${manualPayment.totalDocs} payment(s)`,
+  )
+  // Undo it so the cancellation below can be checked from a delivered order
+  await payload.delete({ collection: 'ledger-entries', id: manualPayment.docs[0]!.id, overrideAccess: true })
+  const fourthReopened = await payload.findByID({
+    collection: 'orders',
+    id: fourthId,
+    overrideAccess: true,
+  })
+  check(
+    'removing that payment reopens the order',
+    fourthReopened.status === 'delivered',
+    fourthReopened.status,
+  )
   const cancelAfterDelivery = await request(`/api/orders/${fourthId}`, {
     method: 'PATCH',
     body: JSON.stringify({ status: 'cancelled' }),
@@ -856,6 +1006,7 @@ try {
       collection: 'ledger-entries',
       where: { order: { equals: id } },
       overrideAccess: true,
+      context: { systemEntry: true },
     })
     await payload.delete({ collection: 'orders', id, overrideAccess: true }).catch(() => {})
   }

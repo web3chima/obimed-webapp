@@ -123,7 +123,7 @@ export const recordInvoiceInLedger: CollectionAfterChangeHook<Order> = async ({
   req,
 }) => {
   // The invoice becomes owed when the goods are delivered, not when it is issued
-  if (doc.status !== 'delivered' || previousDoc?.status === 'delivered' || !doc.invoiceNumber) {
+  if (doc.status !== 'delivered' || previousDoc?.status !== 'invoiced' || !doc.invoiceNumber) {
     return doc
   }
 
@@ -140,6 +140,7 @@ export const recordInvoiceInLedger: CollectionAfterChangeHook<Order> = async ({
       note: `PO ${doc.poNumber}`,
     },
     overrideAccess: true,
+    context: { systemEntry: true },
     req,
   })
   return doc
@@ -169,6 +170,8 @@ export const notifyOrderChanges: CollectionAfterChangeHook<Order> = async ({
   } else if (doc.invoiceNumber && !previousDoc?.invoiceNumber) {
     await notifyInvoiceIssued(payload, doc)
   } else if (doc.status !== previousDoc?.status) {
+    // A corrected payment reopening a paid order is not news for the customer
+    if (previousDoc?.status === 'paid') return doc
     if (doc.status === 'priced') await notifyOrderPriced(payload, doc)
     else await notifyStatusChange(payload, doc)
   }
@@ -177,14 +180,15 @@ export const notifyOrderChanges: CollectionAfterChangeHook<Order> = async ({
 
 // Status only moves forward, and only the right event can move it:
 // Priced ← all items priced, Invoiced ← PO entered, Expired ← invoice not delivered within
-// 7 days, Paid ← fully paid after delivery. Staff may set Delivered (while the invoice is
-// valid) or Cancelled (a credit note is added once invoiced).
+// 7 days, Paid ← fully paid after delivery (or a super admin, which records the payment).
+// Staff may set Delivered (while the invoice is valid) or Cancelled (a credit note is added
+// once delivered). Paid → Delivered only when a payment correction means money is owed again.
 const allowedNext: Record<Order['status'], Order['status'][]> = {
   submitted: ['priced', 'cancelled'],
   priced: ['submitted', 'invoiced', 'cancelled'],
   invoiced: ['delivered', 'cancelled', 'expired'],
   delivered: ['paid', 'cancelled'],
-  paid: [],
+  paid: ['delivered'],
   cancelled: [],
   expired: [],
 }
@@ -226,14 +230,24 @@ export const enforceOrderRules: CollectionBeforeChangeHook<Order> = async ({
   const before = originalDoc.status
   const after = data.status ?? before
   if (after !== before) {
+    if (after === 'paid' && before === 'invoiced') {
+      reject('Set the order to Delivered first; it can be marked Paid after delivery.')
+    }
     if (!allowedNext[before].includes(after)) {
       reject(`An order can't go from "${before}" to "${after}".`)
+    }
+    if (before === 'paid' && !context?.settledByLedger) {
+      reject(
+        'A paid order reopens by itself if a payment is corrected in Sales → Ledger so money is owed again.',
+      )
     }
     if (after === 'invoiced' && !data.invoiceNumber) {
       reject('Invoices are issued when the customer (or you) enters the PO number.')
     }
-    if (after === 'paid' && !context?.settledByLedger) {
-      reject('Record the payment in Sales → Ledger; the order becomes Paid once fully paid.')
+    if (after === 'paid' && !context?.settledByLedger && !isSuperAdmin(req.user)) {
+      reject(
+        'Record the payment in Sales → Ledger (Payment received); the order becomes Paid once fully paid. Only a super admin can mark it Paid by hand.',
+      )
     }
     if (after === 'expired' && !context?.expiredBySchedule) {
       reject('Invoices expire automatically when goods are not delivered within 7 days.')
@@ -316,7 +330,8 @@ export const scheduleDueDateOnDelivery: CollectionBeforeChangeHook<Order> = asyn
   originalDoc,
   req,
 }) => {
-  if (data.status !== 'delivered' || originalDoc?.status === 'delivered') return data
+  // Only on delivery itself, not when a paid order is reopened by a corrected payment
+  if (data.status !== 'delivered' || originalDoc?.status !== 'invoiced') return data
 
   const customerId = typeof data.customer === 'object' ? data.customer?.id : data.customer
   const customer = customerId
@@ -331,30 +346,65 @@ export const scheduleDueDateOnDelivery: CollectionBeforeChangeHook<Order> = asyn
   return data
 }
 
-// An order becomes Paid once it is delivered and nothing is owed on it (payments may arrive
-// before or after delivery)
-export const markPaidWhenSettled = async (
+// Keeps a delivered order's status in line with its ledger balance: Paid once nothing is owed
+// (payments may arrive before or after delivery), back to Delivered if a payment is later
+// corrected or removed so money is owed again. Returns the resulting status.
+export const syncPaidStatus = async (
   payload: Payload,
   orderId: number,
   req?: Parameters<CollectionAfterChangeHook>[0]['req'],
-) => {
-  const order = await payload.findByID({
-    collection: 'orders',
-    id: orderId,
-    depth: 0,
-    overrideAccess: true,
-    req,
-  })
-  if (order.status !== 'delivered') return
-  if ((await orderBalance(payload, orderId, req)) > 0) return
+): Promise<Order['status'] | null> => {
+  const order = await payload
+    .findByID({ collection: 'orders', id: orderId, depth: 0, overrideAccess: true, req })
+    .catch(() => null)
+  if (!order) return null
+  if (order.status !== 'delivered' && order.status !== 'paid') return order.status
+
+  const settled = (await orderBalance(payload, orderId, req)) <= 0
+  const status = settled ? 'paid' : 'delivered'
+  if (status === order.status) return status
+
   await payload.update({
     collection: 'orders',
     id: orderId,
-    data: { status: 'paid' },
+    data: { status },
     overrideAccess: true,
     context: { settledByLedger: true },
     req,
   })
+  return status
+}
+
+// A super admin marking a delivered order Paid by hand: record the outstanding amount as a
+// payment so the ledger and the customer's balance agree with the status
+export const recordManualPayment: CollectionAfterChangeHook<Order> = async ({
+  context,
+  doc,
+  previousDoc,
+  req,
+}) => {
+  if (context?.settledByLedger || doc.status !== 'paid' || previousDoc?.status !== 'delivered') {
+    return doc
+  }
+  const outstanding = await orderBalance(req.payload, doc.id, req)
+  if (outstanding > 0) {
+    await req.payload.create({
+      collection: 'ledger-entries',
+      data: {
+        customer: typeof doc.customer === 'object' ? doc.customer.id : doc.customer,
+        order: doc.id,
+        type: 'payment',
+        amount: outstanding,
+        date: new Date().toISOString(),
+        reference: doc.invoiceNumber,
+        note: `Marked paid by ${req.user?.email ?? 'a super admin'}`,
+      },
+      overrideAccess: true,
+      context: { manualSettlement: true },
+      req,
+    })
+  }
+  return doc
 }
 
 export const settleOnDelivery: CollectionAfterChangeHook<Order> = async ({
@@ -362,8 +412,8 @@ export const settleOnDelivery: CollectionAfterChangeHook<Order> = async ({
   previousDoc,
   req,
 }) => {
-  if (doc.status === 'delivered' && previousDoc?.status !== 'delivered') {
-    await markPaidWhenSettled(req.payload, doc.id, req)
+  if (doc.status === 'delivered' && previousDoc?.status === 'invoiced') {
+    await syncPaidStatus(req.payload, doc.id, req)
   }
   return doc
 }

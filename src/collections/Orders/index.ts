@@ -15,6 +15,7 @@ import {
   issueInvoiceOnPO,
   notifyOrderChanges,
   recordInvoiceInLedger,
+  recordManualPayment,
   scheduleDueDateOnDelivery,
   settleOnDelivery,
 } from './hooks'
@@ -73,6 +74,7 @@ export const Orders: CollectionConfig<'orders'> = {
       recordInvoiceInLedger,
       creditCancelledInvoice,
       settleOnDelivery,
+      recordManualPayment,
       notifyOrderChanges,
     ],
   },
@@ -102,7 +104,7 @@ export const Orders: CollectionConfig<'orders'> = {
           required: true,
           admin: {
             description:
-              'Moves forward only. Priced, Invoiced, Expired and Paid are set automatically; you can set Delivered (within the invoice’s 7-day validity) or Cancelled (after invoicing, a credit note is added to the ledger).',
+              'Moves forward only. Priced, Invoiced, Expired and Paid are set automatically; you can set Delivered (within the invoice’s 7-day validity) or Cancelled (after delivery, a credit note is added to the ledger). A super admin can also set a delivered order to Paid, which records the outstanding amount as a payment.',
           },
         },
       ],

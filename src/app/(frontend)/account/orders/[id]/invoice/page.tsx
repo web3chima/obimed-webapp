@@ -7,6 +7,7 @@ import { getPayload } from 'payload'
 import React from 'react'
 import { ChevronLeftIcon } from 'lucide-react'
 
+import { orderAccount } from '@/collections/LedgerEntries/balance'
 import { PrintButton } from '@/components/Account/PrintButton'
 import { Logo } from '@/components/Logo/Logo'
 import { formatDate, formatDateTime, formatNaira } from '@/utilities/format'
@@ -30,6 +31,8 @@ export default async function InvoicePage({ params }: Args) {
     overrideAccess: false,
     user: customer,
   })
+  const { paid } = await orderAccount(payload, order.id)
+  const balanceDue = Math.max((order.total ?? 0) - paid, 0)
 
   return (
     <div className="container max-w-4xl pt-8 pb-24 print:max-w-none print:p-0">
@@ -45,6 +48,11 @@ export default async function InvoicePage({ params }: Args) {
       </div>
 
       <article className="rounded-2xl border border-border bg-white p-8 text-[#4b4b4d] md:p-12 print:rounded-none print:border-0 print:p-0">
+        {order.status === 'paid' && (
+          <p className="mb-6 rounded-lg border-2 border-brand-green px-4 py-3 text-center font-heading font-bold uppercase tracking-wider text-[#5f7d25]">
+            Paid in full
+          </p>
+        )}
         {(order.status === 'expired' || order.status === 'cancelled') && (
           <p className="mb-6 rounded-lg border-2 border-destructive px-4 py-3 text-center font-heading font-bold uppercase tracking-wider text-destructive">
             {order.status === 'expired' ? 'Expired: not payable' : 'Cancelled: not payable'}
@@ -137,12 +145,33 @@ export default async function InvoicePage({ params }: Args) {
           <tfoot>
             <tr className="border-t-2 border-[#483998]">
               <td className="px-4 py-4 font-heading text-base font-bold text-[#2f2566]" colSpan={3}>
-                Total due
+                Invoice total
               </td>
               <td className="px-4 py-4 text-right font-heading text-base font-bold text-[#2f2566]">
                 {formatNaira(order.total)}
               </td>
             </tr>
+            {paid > 0 && (
+              <>
+                <tr>
+                  <td className="px-4 py-2" colSpan={3}>
+                    Paid
+                  </td>
+                  <td className="px-4 py-2 text-right">− {formatNaira(paid)}</td>
+                </tr>
+                <tr className="border-t border-[#e4e1ef]">
+                  <td
+                    className="px-4 py-3 font-heading text-base font-bold text-[#2f2566]"
+                    colSpan={3}
+                  >
+                    Balance due
+                  </td>
+                  <td className="px-4 py-3 text-right font-heading text-base font-bold text-[#2f2566]">
+                    {formatNaira(balanceDue)}
+                  </td>
+                </tr>
+              </>
+            )}
           </tfoot>
         </table>
 

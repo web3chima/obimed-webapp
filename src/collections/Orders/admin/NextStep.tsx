@@ -56,14 +56,15 @@ export const NextStep: React.FC = () => {
   } else if (status === 'delivered') {
     title = 'Delivered: awaiting payment'
     text =
-      'Payment is due by the date in “Payment due” (right). Record each payment in Sales → Ledger (Type: Payment received, choose this order). The order becomes Paid automatically once fully paid.'
+      'Payment is due by the date in “Payment due” (right). When money arrives, go to Sales → Ledger → Create New, choose Type “Payment received”, pick this order and enter the amount received. Part payments reduce the balance; the order becomes Paid as soon as nothing is owed. Don’t edit the order’s Invoice entry in the ledger. A super admin can also set Status to Paid here, which records the outstanding amount as a payment.'
   } else if (status === 'expired') {
     title = 'Invoice expired'
     text =
       'The goods were not delivered within 7 days and nothing had been paid, so the invoice expired. It was never owed, so the ledger is unchanged. The customer can submit a new request.'
   } else if (status === 'paid') {
     title = 'Complete'
-    text = 'This order is paid in full.'
+    text =
+      'This order is paid in full. If a payment in the ledger is corrected or removed so money is owed again, it goes back to Delivered by itself.'
   } else {
     title = 'Cancelled'
     text = 'This order was cancelled.'
