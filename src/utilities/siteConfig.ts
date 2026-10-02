@@ -14,7 +14,7 @@ export const siteConfig = {
     accounts: 'accounts@obimedpharmaceuticals.com',
   },
   phones: ['+2349020755721', '+2348027348067', '+2348114299580', '+2348138582199'],
-  whatsapp: '2349020755721',
+  whatsapp: '2348114299580',
   address: '208/210 Oshodi Apapa Expressway, Ilasamaja, Lagos, Nigeria',
 }
 
