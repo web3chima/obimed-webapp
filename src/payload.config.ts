@@ -119,7 +119,11 @@ export default buildConfig({
   // writes each email to the server log instead
   email: process.env.SMTP_HOST
     ? nodemailerAdapter({
-        defaultFromAddress: process.env.SMTP_FROM || siteConfig.email,
+        // SMTP_FROM may be "Name <address>"; Payload adds the name itself
+        defaultFromAddress:
+          (process.env.SMTP_FROM || '').match(/<([^>]+)>/)?.[1] ||
+          process.env.SMTP_FROM ||
+          siteConfig.email,
         defaultFromName: siteConfig.name,
         skipVerify: true,
         transportOptions: {

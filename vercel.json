@@ -5,5 +5,13 @@
       "path": "/api/orders/expire-invoices",
       "schedule": "5 23 * * *"
     }
+  ],
+  "redirects": [
+    {
+      "source": "/((?!api/).*)",
+      "has": [{ "type": "host", "value": "obimed-webapp.vercel.app" }],
+      "destination": "https://www.obimedpharmaceuticals.com/$1",
+      "permanent": true
+    }
   ]
 }

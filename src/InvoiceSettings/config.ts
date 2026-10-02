@@ -46,7 +46,7 @@ export const InvoiceSettings: GlobalConfig = {
               admin: {
                 placeholder: 'sales@example.com, manager@example.com',
                 description:
-                  'Separate several addresses with commas. If left empty, alerts go to info@obimedpharmaceuticals.com.',
+                  'Separate several addresses with commas. If left empty, alerts go to sales@obimedpharmaceuticals.com.',
               },
             },
           ],

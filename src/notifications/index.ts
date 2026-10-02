@@ -4,7 +4,17 @@ import type { Customer, Order } from '@/payload-types'
 
 import { formatDateTime, formatNaira } from '@/utilities/format'
 import { getServerSideURL } from '@/utilities/getURL'
-import { siteConfig } from '@/utilities/siteConfig'
+import { formatPhone, siteConfig } from '@/utilities/siteConfig'
+
+// Which Obimed address an email comes from (and replies go to). All are aliases of info@.
+type Sender = 'info' | 'orders' | 'sales' | 'accounts'
+
+const senders: Record<Sender, { name: string; address: string }> = {
+  info: { name: 'Obimed Pharmaceutical', address: siteConfig.email },
+  orders: { name: 'Obimed Orders', address: siteConfig.emails.orders },
+  sales: { name: 'Obimed Sales', address: siteConfig.emails.sales },
+  accounts: { name: 'Obimed Accounts', address: siteConfig.emails.accounts },
+}
 
 type Message = {
   to: string | string[]
@@ -12,41 +22,76 @@ type Message = {
   heading: string
   lines: string[]
   action?: { label: string; url: string }
+  from?: Sender
 }
 
 const escape = (value: string) =>
   value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
-const renderHTML = ({ action, heading, lines }: Message) => `
-<div style="font-family:Arial,Helvetica,sans-serif;background:#f7f6fb;padding:24px">
-  <div style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden">
-    <div style="background:#483998;padding:20px 28px;border-bottom:6px solid #96bb49">
-      <span style="color:#ffffff;font-size:20px;font-weight:bold">${escape(siteConfig.name)}</span>
-    </div>
-    <div style="padding:28px;color:#4b4b4d;font-size:15px;line-height:1.6">
-      <h1 style="color:#2f2566;font-size:20px;margin:0 0 16px">${escape(heading)}</h1>
-      ${lines.map((line) => `<p style="margin:0 0 12px">${escape(line)}</p>`).join('')}
-      ${
-        action
-          ? `<p style="margin:24px 0 0"><a href="${escape(action.url)}" style="background:#483998;color:#ffffff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:bold">${escape(action.label)}</a></p>`
-          : ''
-      }
-    </div>
-    <div style="padding:16px 28px;background:#f7f6fb;color:#66666b;font-size:12px">
-      ${escape(siteConfig.address)} · ${escape(siteConfig.email)} · RC ${siteConfig.rcNumber}
-    </div>
-  </div>
-</div>`
+const font = "'Montserrat','Segoe UI',Arial,Helvetica,sans-serif"
+const bodyFont = "'Open Sans','Segoe UI',Arial,Helvetica,sans-serif"
 
-const renderText = ({ action, heading, lines }: Message) =>
-  [heading, '', ...lines, ...(action ? ['', `${action.label}: ${action.url}`] : [])].join('\n')
+// Table layout and inline styles so it renders the same in Gmail, Outlook and phone mail apps
+const renderHTML = ({ action, from = 'info', heading, lines }: Message) => {
+  const site = getServerSideURL()
+  const sender = senders[from]
+  return `<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light only"></head>
+<body style="margin:0;padding:0;background:#f2f0f8">
+<span style="display:none;max-height:0;overflow:hidden;opacity:0">${escape(lines[0] ?? heading)}</span>
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f2f0f8;padding:24px 12px">
+  <tr><td align="center">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#ffffff;border-radius:14px;overflow:hidden;border:1px solid #e4e1ef">
+      <tr><td style="height:6px;background:#483998;font-size:0;line-height:0">&nbsp;</td></tr>
+      <tr><td style="padding:26px 32px 18px">
+        <a href="${site}" style="text-decoration:none"><img src="${site}/brand/obimed-logo.png" width="170" height="51" alt="${escape(siteConfig.name)}" style="display:block;border:0;width:170px;height:auto"></a>
+      </td></tr>
+      <tr><td style="height:3px;background:#96bb49;font-size:0;line-height:0">&nbsp;</td></tr>
+      <tr><td style="padding:30px 32px 8px;font-family:${bodyFont};color:#4b4b4d;font-size:15px;line-height:1.65">
+        <h1 style="margin:0 0 18px;font-family:${font};font-size:21px;line-height:1.3;color:#2f2566">${escape(heading)}</h1>
+        ${lines.map((line) => `<p style="margin:0 0 14px">${escape(line)}</p>`).join('')}
+        ${
+          action
+            ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0 8px"><tr><td style="border-radius:8px;background:#483998"><a href="${escape(action.url)}" style="display:inline-block;padding:13px 24px;font-family:${font};font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:8px">${escape(action.label)} &rarr;</a></td></tr></table>`
+            : ''
+        }
+        <p style="margin:26px 0 0;color:#66666b">Kind regards,<br><strong style="color:#2f2566">${escape(sender.name)}</strong><br><a href="mailto:${sender.address}" style="color:#483998;text-decoration:none">${sender.address}</a></p>
+      </td></tr>
+      <tr><td style="padding:28px 32px 0">&nbsp;</td></tr>
+      <tr><td style="background:#2f2566;padding:22px 32px;font-family:${bodyFont};font-size:12px;line-height:1.7;color:#d9d5ec">
+        <strong style="font-family:${font};font-size:13px;color:#ffffff">${escape(siteConfig.name)}</strong><br>
+        ${escape(siteConfig.address)}<br>
+        ${siteConfig.phones.slice(0, 2).map(formatPhone).join(' &middot; ')} &middot; <a href="mailto:${siteConfig.email}" style="color:#c5dc93;text-decoration:none">${siteConfig.email}</a><br>
+        <a href="${site}" style="color:#c5dc93;text-decoration:none">${escape(site.replace(/^https?:\/\//, ''))}</a> &middot; RC ${siteConfig.rcNumber}
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+</body></html>`
+}
+
+const renderText = ({ action, from = 'info', heading, lines }: Message) =>
+  [
+    heading,
+    '',
+    ...lines,
+    ...(action ? ['', `${action.label}: ${action.url}`] : []),
+    '',
+    'Kind regards,',
+    senders[from].name,
+    '',
+    `${siteConfig.name} · ${siteConfig.address} · ${siteConfig.email}`,
+  ].join('\n')
 
 // Never let a failed email break the order action that triggered it
 export const sendNotification = async (payload: Payload, message: Message) => {
   const to = (Array.isArray(message.to) ? message.to : [message.to]).filter(Boolean)
   if (to.length === 0) return
+  const sender = senders[message.from ?? 'info']
   try {
     await payload.sendEmail({
+      from: `"${sender.name}" <${sender.address}>`,
+      replyTo: sender.address,
       to,
       subject: message.subject,
       html: renderHTML(message),
@@ -63,7 +108,7 @@ const staffEmails = async (payload: Payload) => {
     .split(',')
     .map((email) => email.trim())
     .filter(Boolean)
-  return configured.length > 0 ? configured : [siteConfig.email]
+  return configured.length > 0 ? configured : [siteConfig.emails.sales]
 }
 
 const customerOf = async (payload: Payload, order: Order): Promise<Customer | null> => {
@@ -95,6 +140,7 @@ export const notifyNewRegistration = async (payload: Payload, customer: Customer
 export const notifyAccountApproved = async (payload: Payload, customer: Customer) =>
   sendNotification(payload, {
     to: customer.email,
+    from: 'sales',
     subject: 'Your Obimed account is approved',
     heading: `Welcome, ${customer.name}`,
     lines: [
@@ -121,6 +167,7 @@ export const notifyOrderSubmitted = async (payload: Payload, order: Order) => {
   if (customer) {
     await sendNotification(payload, {
       to: customer.email,
+      from: 'orders',
       subject: `We received your quote request ${order.orderNumber}`,
       heading: 'Thank you for your request',
       lines: [
@@ -137,6 +184,7 @@ export const notifyOrderPriced = async (payload: Payload, order: Order) => {
   if (!customer) return
   await sendNotification(payload, {
     to: customer.email,
+    from: 'orders',
     subject: `Your order ${order.orderNumber} is priced`,
     heading: 'Your order is ready for your PO number',
     lines: [
@@ -162,6 +210,7 @@ export const notifyInvoiceIssued = async (payload: Payload, order: Order) => {
   if (customer) {
     await sendNotification(payload, {
       to: customer.email,
+      from: 'accounts',
       subject: `Invoice ${order.invoiceNumber} for PO ${order.poNumber}`,
       heading: `Invoice ${order.invoiceNumber}`,
       lines: [
@@ -225,6 +274,7 @@ export const notifyStatusChange = async (payload: Payload, order: Order) => {
   if (!build || !customer) return
   await sendNotification(payload, {
     to: customer.email,
+    from: order.status === 'paid' ? 'accounts' : 'orders',
     ...build(order),
     action: { label: 'View your order', url: orderLink(order) },
   })
@@ -239,6 +289,7 @@ export const notifyPaymentReceived = async (
 ) =>
   sendNotification(payload, {
     to: customer.email,
+    from: 'accounts',
     subject: `Payment received: ${formatNaira(amount)}`,
     heading: 'Payment received',
     lines: [

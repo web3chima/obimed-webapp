@@ -7,6 +7,12 @@ export const siteConfig = {
   description:
     'Obimed Pharmaceutical Ltd. imports, distributes and markets Active Pharmaceutical Ingredients (APIs), excipients and food-grade raw materials for pharmaceutical and food manufacturers in Nigeria.',
   email: 'info@obimedpharmaceuticals.com',
+  // Google Workspace aliases of info@ (mail to any of them lands in the info@ inbox)
+  emails: {
+    orders: 'orders@obimedpharmaceuticals.com',
+    sales: 'sales@obimedpharmaceuticals.com',
+    accounts: 'accounts@obimedpharmaceuticals.com',
+  },
   phones: ['+2349020755721', '+2348027348067', '+2348114299580', '+2348138582199'],
   whatsapp: '2349020755721',
   address: '208/210 Oshodi Apapa Expressway, Ilasamaja, Lagos, Nigeria',

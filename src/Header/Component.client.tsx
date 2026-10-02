@@ -24,9 +24,10 @@ export const HeaderClient: React.FC<HeaderClientProps> = ({ data }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname])
 
+  // Follow the page: a purple banner asks for the white (dark) header; every other page,
+  // e.g. the customer account, gets the normal header with the colour logo
   useEffect(() => {
-    if (headerTheme && headerTheme !== theme) setTheme(headerTheme)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setTheme(headerTheme ?? null)
   }, [headerTheme])
 
   return (
