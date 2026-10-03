@@ -8,6 +8,7 @@ import React from 'react'
 import { ChevronLeftIcon } from 'lucide-react'
 
 import { orderAccount } from '@/collections/LedgerEntries/balance'
+import { dueInWords, termsLabel } from '@/collections/Orders/terms'
 import { PrintButton } from '@/components/Account/PrintButton'
 import { Logo } from '@/components/Logo/Logo'
 import { formatDate, formatDateTime, formatNaira } from '@/utilities/format'
@@ -90,8 +91,10 @@ export default async function InvoicePage({ params }: Args) {
               <dd className="font-bold text-[#2f2566]">
                 {order.dueDate
                   ? formatDateTime(order.dueDate)
-                  : `${customer.creditDays ?? 15} days after delivery`}
+                  : dueInWords(order.paymentTerms ? order : customer)}
               </dd>
+              <dt className="font-semibold">Terms</dt>
+              <dd>{termsLabel(order.paymentTerms ? order : customer)}</dd>
               <dt className="font-semibold">PO / LPO no.</dt>
               <dd>{order.poNumber}</dd>
               <dt className="font-semibold">Order no.</dt>

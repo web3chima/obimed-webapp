@@ -1,6 +1,6 @@
 'use client'
 import { useDocumentInfo, useFormFields } from '@payloadcms/ui'
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 
 const box: React.CSSProperties = {
   border: '1px solid var(--theme-elevation-150)',
@@ -23,6 +23,28 @@ export const NextStep: React.FC = () => {
     (_, i) => typeof fields[`items.${i}.unitPrice`]?.value !== 'number',
   ).length
   const invoiceNumber = fields.invoiceNumber?.value as string | undefined
+  const terms = fields.paymentTerms?.value as string | undefined
+  const total = Number(fields.total?.value ?? 0)
+
+  // Pay-before-delivery orders: how much has come in, so staff can check before delivering
+  const [paid, setPaid] = useState<number | null>(null)
+  useEffect(() => {
+    if (!id || status !== 'invoiced' || terms !== 'prepaid') return
+    fetch(`/api/ledger-entries?where[order][equals]=${id}&limit=200&depth=0`, {
+      credentials: 'include',
+    })
+      .then((res) => res.json())
+      .then((data: { docs?: { type: string; amount: number }[] }) =>
+        setPaid(
+          (data.docs || [])
+            .filter((entry) => entry.type !== 'invoice')
+            .reduce((sum, entry) => sum + entry.amount, 0),
+        ),
+      )
+      .catch(() => setPaid(null))
+  }, [id, status, terms])
+  const naira = (value: number) =>
+    `₦${value.toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   const validUntil = fields.invoiceValidUntil?.value as string | undefined
   const validText = validUntil
     ? new Date(validUntil).toLocaleString('en-GB', {
@@ -49,10 +71,20 @@ export const NextStep: React.FC = () => {
     title = 'Waiting for the customer’s PO number'
     text =
       'The customer has been asked to enter their PO number on their account, which issues the invoice. If they sent the PO to you directly, type it in “PO / LPO number” (right) and Save.'
+  } else if (status === 'invoiced' && terms === 'prepaid') {
+    const unpaid = paid !== null && paid < total
+    title = `Invoiced${invoiceNumber ? ` (${invoiceNumber})` : ''}: pay before delivery, by ${validText}`
+    text = `${
+      paid === null
+        ? 'Checking payments…'
+        : unpaid
+          ? `⚠ Not fully paid: ${naira(paid)} of ${naira(total)} received. This customer pays before delivery; check Sales → Ledger before you deliver.`
+          : `Paid in full (${naira(paid)}). You can deliver now.`
+    } When the goods are delivered, set Status to Delivered and Save. If it is neither delivered nor paid within 7 days it expires automatically.`
   } else if (status === 'invoiced') {
     title = `Invoiced${invoiceNumber ? ` (${invoiceNumber})` : ''}: deliver by ${validText}`
     text =
-      'You have 7 days to deliver. When the goods are delivered, set Status to Delivered and Save: the invoice is then recorded as owed and payment is due after the customer’s terms from that moment. If it is neither delivered nor paid in 7 days it expires automatically. Payments received before delivery stop it expiring.'
+      'You have 7 days to deliver. When the goods are delivered, set Status to Delivered and Save: the invoice is then recorded as owed and payment is due under the customer’s terms (on delivery, or after their credit days). If it is neither delivered nor paid in 7 days it expires automatically. Payments received before delivery stop it expiring.'
   } else if (status === 'delivered') {
     title = 'Delivered: awaiting payment'
     text =
@@ -70,8 +102,9 @@ export const NextStep: React.FC = () => {
     text = 'This order was cancelled.'
   }
 
+  const warn = status === 'invoiced' && terms === 'prepaid' && paid !== null && paid < total
   return (
-    <div style={box}>
+    <div style={warn ? { ...box, borderLeftColor: '#d97706' } : box}>
       <strong style={{ display: 'block', marginBottom: 4 }}>{title}</strong>
       <span>{text}</span>
     </div>

@@ -8,6 +8,7 @@ import React from 'react'
 import { ChevronLeftIcon, FileTextIcon } from 'lucide-react'
 
 import { orderAccount } from '@/collections/LedgerEntries/balance'
+import { dueInWords, termsOf } from '@/collections/Orders/terms'
 import { OrderStatus } from '@/components/Account/OrderStatus'
 import { OrderTimeline } from '@/components/Account/OrderTimeline'
 import { POForm } from '@/components/Account/POForm'
@@ -82,10 +83,17 @@ export default async function OrderPage({ params }: Args) {
                   <strong>{formatDateTime(order.dueDate)}</strong>
                 </>
               ) : order.status === 'invoiced' ? (
-                <>
-                  Delivery by <strong>{formatDateTime(order.invoiceValidUntil)}</strong> · Payment
-                  due {customer.creditDays ?? 15} days after delivery
-                </>
+                termsOf(order.paymentTerms ? order : customer).kind === 'prepaid' ? (
+                  <>
+                    Please pay by <strong>{formatDateTime(order.invoiceValidUntil)}</strong>; we
+                    deliver once payment is received
+                  </>
+                ) : (
+                  <>
+                    Delivery by <strong>{formatDateTime(order.invoiceValidUntil)}</strong> · Payment
+                    due {dueInWords(order.paymentTerms ? order : customer)}
+                  </>
+                )
               ) : null}
             </p>
           </div>

@@ -2,7 +2,14 @@ import type { Payload } from 'payload'
 
 import type { Customer, Order } from '@/payload-types'
 
-import { formatDateTime, formatNaira } from '@/utilities/format'
+import { orderAccount } from '@/collections/LedgerEntries/balance'
+import {
+  INVOICE_VALIDITY_DAYS,
+  dueInWords,
+  termsLabel,
+  termsOf,
+} from '@/collections/Orders/terms'
+import { formatDate, formatDateTime, formatNaira } from '@/utilities/format'
 import { getServerSideURL } from '@/utilities/getURL'
 import { formatPhone, siteConfig } from '@/utilities/siteConfig'
 
@@ -137,6 +144,38 @@ export const notifyNewRegistration = async (payload: Payload, customer: Customer
     action: { label: 'Review account', url: adminLink('customers', customer.id) },
   })
 
+const addDays = (date: Date, days: number) => new Date(date.getTime() + days * 86_400_000)
+
+// The customer's terms in plain words, with a worked example using real dates
+export const paymentTermsLines = (customer: Pick<Customer, 'paymentTerms' | 'creditDays'>) => {
+  const { days, kind } = termsOf(customer)
+  const issued = new Date()
+  const deliverBy = addDays(issued, INVOICE_VALIDITY_DAYS)
+  const delivered = addDays(issued, 3)
+  const day = (date: Date) => formatDate(date.toISOString())
+  const lines = [
+    `Your payment terms: ${termsLabel(customer)}.`,
+    `Delivery: each invoice is valid for ${INVOICE_VALIDITY_DAYS} days from the date it is issued. This is our delivery window; if the goods are not delivered in that time and nothing has been paid, the invoice expires and you owe nothing on it.`,
+  ]
+  if (kind === 'prepaid') {
+    lines.push(
+      'Payment: please pay each invoice in full within its validity. We deliver once your payment is received.',
+      `For example, an invoice issued on ${day(issued)} should be paid by ${day(deliverBy)}, and we deliver once it is paid, by ${day(deliverBy)} at the latest.`,
+    )
+  } else if (kind === 'on-delivery') {
+    lines.push(
+      'Payment: payment is due on the day your goods are delivered.',
+      `For example, an invoice issued on ${day(issued)} is valid for delivery until ${day(deliverBy)}. If the goods are delivered on ${day(delivered)}, payment is due that day.`,
+    )
+  } else {
+    lines.push(
+      `Payment: payment is due ${days} days after your goods are delivered; we confirm the exact due date when they arrive.`,
+      `For example, an invoice issued on ${day(issued)} is valid for delivery until ${day(deliverBy)}. If the goods are delivered on ${day(delivered)}, payment is due by ${day(addDays(delivered, days))}.`,
+    )
+  }
+  return lines
+}
+
 export const notifyAccountApproved = async (payload: Payload, customer: Customer) =>
   sendNotification(payload, {
     to: customer.email,
@@ -146,8 +185,22 @@ export const notifyAccountApproved = async (payload: Payload, customer: Customer
     lines: [
       `Your account for ${customer.company} is now active.`,
       'You can sign in to request quotes, submit PO numbers and download invoices.',
+      ...paymentTermsLines(customer),
     ],
     action: { label: 'Sign in', url: `${site()}/account/login` },
+  })
+
+export const notifyPaymentTermsChanged = async (payload: Payload, customer: Customer) =>
+  sendNotification(payload, {
+    to: customer.email,
+    from: 'accounts',
+    subject: 'Your payment terms with Obimed',
+    heading: 'Your payment terms have been updated',
+    lines: [
+      `The payment terms for ${customer.company} are now: ${termsLabel(customer)}. They apply to invoices issued from today; invoices already issued keep their original terms.`,
+      ...paymentTermsLines(customer).slice(1),
+    ],
+    action: { label: 'View your account', url: `${site()}/account` },
   })
 
 // ---- Order lifecycle -------------------------------------------------------------------
@@ -215,7 +268,9 @@ export const notifyInvoiceIssued = async (payload: Payload, order: Order) => {
       heading: `Invoice ${order.invoiceNumber}`,
       lines: [
         `Thank you for PO ${order.poNumber}. Your invoice for ${formatNaira(order.total)} is ready.`,
-        `We will deliver by ${formatDateTime(order.invoiceValidUntil)}. Payment is due ${customer.creditDays ?? 15} days after delivery; we will confirm the exact date when your goods arrive.`,
+        order.paymentTerms === 'prepaid' || (!order.paymentTerms && termsOf(customer).kind === 'prepaid')
+          ? `Please pay by ${formatDateTime(order.invoiceValidUntil)}. We deliver once payment is received, within the invoice’s ${INVOICE_VALIDITY_DAYS}-day validity.`
+          : `We will deliver by ${formatDateTime(order.invoiceValidUntil)}. Payment is due ${dueInWords(order.paymentTerms ? order : customer)}; we will confirm the exact date when your goods arrive.`,
         `Please quote ${order.invoiceNumber} as your payment reference.`,
       ],
       action: { label: 'View & print invoice', url: `${orderLink(order)}/invoice` },
@@ -223,13 +278,21 @@ export const notifyInvoiceIssued = async (payload: Payload, order: Order) => {
   }
 }
 
-const statusMessages: Partial<Record<Order['status'], (order: Order) => Omit<Message, 'to'>>> = {
-  delivered: (order) => ({
+const statusMessages: Partial<
+  Record<Order['status'], (order: Order, owed?: number) => Omit<Message, 'to'>>
+> = {
+  delivered: (order, owed = 0) => ({
     subject: `Order ${order.orderNumber} delivered`,
     heading: 'Your order has been delivered',
     lines: [
       `Order ${order.orderNumber} (PO ${order.poNumber}) was delivered on ${formatDateTime(order.deliveredAt)}.`,
-      `Payment for invoice ${order.invoiceNumber} (${formatNaira(order.total)}) is due by ${formatDateTime(order.dueDate)}.`,
+      owed <= 0
+        ? `Invoice ${order.invoiceNumber} is paid in full. Thank you.`
+        : order.paymentTerms === 'prepaid'
+          ? `${formatNaira(owed)} on invoice ${order.invoiceNumber} is still unpaid. It was due before delivery, so please pay it now.`
+          : order.paymentTerms === 'on-delivery'
+            ? `Payment of ${formatNaira(owed)} for invoice ${order.invoiceNumber} is due today.`
+            : `Payment of ${formatNaira(owed)} for invoice ${order.invoiceNumber} is due by ${formatDateTime(order.dueDate)}.`,
       'Please inspect the goods. Report quantity issues within 7 days and quality issues within 15 days.',
     ],
   }),
@@ -272,10 +335,15 @@ export const notifyStatusChange = async (payload: Payload, order: Order) => {
   const build = statusMessages[order.status]
   const customer = build ? await customerOf(payload, order) : null
   if (!build || !customer) return
+  // What is still owed on delivery (payments may already be in)
+  const owed =
+    order.status === 'delivered'
+      ? Math.max((order.total ?? 0) - (await orderAccount(payload, order.id)).paid, 0)
+      : 0
   await sendNotification(payload, {
     to: customer.email,
     from: order.status === 'paid' ? 'accounts' : 'orders',
-    ...build(order),
+    ...build(order, owed),
     action: { label: 'View your order', url: orderLink(order) },
   })
 }

@@ -8,6 +8,7 @@ import React from 'react'
 import { ChevronRightIcon, FileTextIcon } from 'lucide-react'
 
 import { customerBalance } from '@/collections/LedgerEntries/balance'
+import { dueInWords, termsLabel } from '@/collections/Orders/terms'
 import { LogoutButton } from '@/components/Account/AuthForms'
 import { OrderStatus } from '@/components/Account/OrderStatus'
 import { Button } from '@/components/ui/button'
@@ -65,8 +66,9 @@ export default async function AccountPage() {
         <div className="rounded-2xl border border-border bg-card p-5">
           <p className="text-sm text-muted-foreground">Payment terms</p>
           <p className="mt-1 font-heading text-2xl font-bold text-heading">
-            {customer.creditDays ?? 15} days
+            {termsLabel(customer)}
           </p>
+          <p className="mt-1 text-xs text-muted-foreground">Payment due {dueInWords(customer)}</p>
         </div>
       </div>
 

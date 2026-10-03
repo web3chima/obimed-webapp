@@ -2,7 +2,10 @@
 // requests, PO → invoice, the ledger and notification emails, run against a local dev server.
 // Creates throwaway customers, staff and orders and deletes them afterwards.
 // Run from the project root with the dev server running (and its log in TEST_DEV_LOG to check
-// the emails it sends): TEST_DEV_LOG=dev.log bun src/scripts/test-order-flow.ts
+// the emails it sends). Both must run with email sending off, so no real emails go out and the
+// emails are written to the log instead:
+//   SMTP_HOST= bunx next dev --webpack > dev.log
+//   SMTP_HOST= TEST_DEV_LOG=dev.log bun src/scripts/test-order-flow.ts
 import type { Customer } from '@/payload-types'
 
 import { readFile } from 'fs/promises'
@@ -11,6 +14,11 @@ import { getPayload } from 'payload'
 import config from '@payload-config'
 
 import { formatNaira } from '@/utilities/format'
+
+if (process.env.SMTP_HOST) {
+  console.error('Email sending is on. Run with SMTP_HOST= (empty) so the test sends no real emails.')
+  process.exit(1)
+}
 
 const BASE = process.env.TEST_BASE_URL || 'http://localhost:3000'
 const payload = await getPayload({ config })
@@ -95,15 +103,15 @@ try {
   const a = makeCustomer('a')
   const reg = await request('/api/customers', {
     method: 'POST',
-    body: JSON.stringify({ ...a, approved: true, creditDays: 999 }),
+    body: JSON.stringify({ ...a, approved: true, paymentTerms: 'credit', creditDays: 999 }),
   })
   check('register customer', reg.status === 201, `status ${reg.status}`)
   const aId = reg.body?.doc?.id as number
   created.customers.push(aId)
   const fresh = await payload.findByID({ collection: 'customers', id: aId, overrideAccess: true })
   check(
-    'registration cannot set approved/creditDays',
-    fresh.approved === false && fresh.creditDays === 15,
+    'registration cannot set approval or payment terms (defaults to pay before delivery)',
+    fresh.approved === false && fresh.paymentTerms === 'prepaid' && fresh.creditDays === 15,
   )
 
   const early = await customerSignIn(a.email, a.password)
@@ -115,11 +123,11 @@ try {
     `status ${early.status}`,
   )
 
-  // 2. Approve, then sign in with the customer cookie
+  // 2. Approve with 15 days credit, then sign in with the customer cookie
   await payload.update({
     collection: 'customers',
     id: aId,
-    data: { approved: true },
+    data: { approved: true, paymentTerms: 'credit', creditDays: 15 },
     overrideAccess: true,
   })
   const session = await customerSignIn(a.email, a.password)
@@ -973,6 +981,75 @@ try {
     `status ${cancelAfterDelivery.status}, ${fourthCredit.totalDocs} credit note(s)`,
   )
 
+  // 10e. Customer B pays before delivery (the default): the invoice is due within its validity,
+  // delivery while unpaid is allowed (staff are only warned), and changing terms emails B
+  const prepaidReq = await request('/api/orders/request', {
+    method: 'POST',
+    body: JSON.stringify({ items: [{ slug: 'corn-starch', quantity: 2 }] }),
+    cookie: sessionB.cookie,
+  })
+  const prepaidId = prepaidReq.body?.id as number
+  created.orders.push(prepaidId)
+  const prepaidDoc = await payload.findByID({
+    collection: 'orders',
+    id: prepaidId,
+    overrideAccess: true,
+  })
+  await payload.update({
+    collection: 'orders',
+    id: prepaidId,
+    data: { items: prepaidDoc.items.map((item) => ({ ...item, unitPrice: 10000 })) },
+    overrideAccess: true,
+  })
+  await request(`/api/orders/${prepaidId}/po`, {
+    method: 'POST',
+    body: JSON.stringify({ poNumber: 'PO-PREPAID' }),
+    cookie: sessionB.cookie,
+  })
+  const prepaidInvoiced = await payload.findByID({
+    collection: 'orders',
+    id: prepaidId,
+    overrideAccess: true,
+  })
+  check(
+    'pay-before-delivery invoice is due by the end of its validity',
+    prepaidInvoiced.paymentTerms === 'prepaid' &&
+      prepaidInvoiced.dueDate === prepaidInvoiced.invoiceValidUntil,
+    `${prepaidInvoiced.paymentTerms} due ${prepaidInvoiced.dueDate}`,
+  )
+  const prepaidDeliver = await request(`/api/orders/${prepaidId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status: 'delivered' }),
+    cookie: salesCookie,
+  })
+  const prepaidDelivered = await payload.findByID({
+    collection: 'orders',
+    id: prepaidId,
+    overrideAccess: true,
+  })
+  check(
+    'unpaid pay-before-delivery order can still be delivered (warning only)',
+    prepaidDeliver.status === 200 &&
+      prepaidDelivered.status === 'delivered' &&
+      prepaidDelivered.dueDate === prepaidInvoiced.dueDate,
+    `status ${prepaidDeliver.status}, ${prepaidDelivered.status}`,
+  )
+  await payload.update({
+    collection: 'customers',
+    id: customerB.id,
+    data: { paymentTerms: 'on-delivery' },
+    overrideAccess: true,
+  })
+  const prepaidAfterTermsChange = await payload.findByID({
+    collection: 'orders',
+    id: prepaidId,
+    overrideAccess: true,
+  })
+  check(
+    'changing terms leaves issued invoices on their original terms',
+    prepaidAfterTermsChange.paymentTerms === 'prepaid',
+  )
+
   // 11. Signing out revokes the session: the old cookie no longer works
   await request('/api/customers/session', { method: 'DELETE', cookie })
   const afterSignOut = await request('/account', { cookie })
@@ -987,6 +1064,7 @@ try {
   const expected: [string, string][] = [
     ['staff told about new registration', `New customer registration: ${a.company}`],
     ['customer told account approved', 'Your Obimed account is approved'],
+    ['customer told new payment terms', 'Your payment terms with Obimed'],
     ['staff told about quote request', `New quote request ${orderNumber}`],
     ['customer told request received', `We received your quote request ${orderNumber}`],
     ['customer told order priced', `Your order ${orderNumber} is priced`],

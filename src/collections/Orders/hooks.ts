@@ -5,6 +5,8 @@ import { APIError } from 'payload'
 import { isSuperAdmin } from '@/access/roles'
 import { orderBalance } from '@/collections/LedgerEntries/balance'
 
+import { INVOICE_VALIDITY_DAYS, termsOf } from './terms'
+
 import type { Order } from '@/payload-types'
 
 import {
@@ -63,7 +65,7 @@ export const calculateTotals: CollectionBeforeChangeHook<Order> = ({ data }) => 
   return data
 }
 
-export const INVOICE_VALIDITY_DAYS = 7
+export { INVOICE_VALIDITY_DAYS }
 
 const addDays = (date: Date, days: number) => {
   const result = new Date(date)
@@ -105,13 +107,26 @@ export const issueInvoiceOnPO: CollectionBeforeChangeHook<Order> = async ({
   }
 
   const invoiceDate = new Date()
+  const validUntil = addDays(invoiceDate, INVOICE_VALIDITY_DAYS)
+
+  // The invoice keeps the customer's terms at this moment, even if they change later
+  const customerId =
+    typeof originalDoc?.customer === 'object' ? originalDoc.customer.id : originalDoc?.customer
+  const customer = customerId
+    ? await req.payload
+        .findByID({ collection: 'customers', id: customerId, depth: 0, overrideAccess: true, req })
+        .catch(() => null)
+    : null
+  const terms = termsOf(customer)
 
   data.poNumber = poNumber
   data.invoiceNumber = await nextNumber(req.payload, 'invoiceNumber', 'INV')
   data.invoiceDate = invoiceDate.toISOString()
-  data.invoiceValidUntil = addDays(invoiceDate, INVOICE_VALIDITY_DAYS).toISOString()
-  // The payment due date is set when the goods are delivered
-  data.dueDate = null
+  data.invoiceValidUntil = validUntil.toISOString()
+  data.paymentTerms = terms.kind
+  data.creditDays = terms.kind === 'credit' ? terms.days : null
+  // Pay before delivery: due by the end of the delivery window. Otherwise it is set on delivery.
+  data.dueDate = terms.kind === 'prepaid' ? validUntil.toISOString() : null
   data.status = 'invoiced'
   return data
 }
@@ -324,7 +339,8 @@ export const creditCancelledInvoice: CollectionAfterChangeHook<Order> = async ({
   return doc
 }
 
-// Marking an order delivered records when, and starts the payment terms from that moment
+// Marking an order delivered records when; for pay-on-delivery and credit customers the payment
+// terms start from that moment (pay-before-delivery invoices were already due)
 export const scheduleDueDateOnDelivery: CollectionBeforeChangeHook<Order> = async ({
   data,
   originalDoc,
@@ -333,16 +349,23 @@ export const scheduleDueDateOnDelivery: CollectionBeforeChangeHook<Order> = asyn
   // Only on delivery itself, not when a paid order is reopened by a corrected payment
   if (data.status !== 'delivered' || originalDoc?.status !== 'invoiced') return data
 
-  const customerId = typeof data.customer === 'object' ? data.customer?.id : data.customer
-  const customer = customerId
-    ? await req.payload
-        .findByID({ collection: 'customers', id: customerId, depth: 0, overrideAccess: true, req })
-        .catch(() => null)
-    : null
+  // Invoices from before terms were recorded on the order use the customer's current terms
+  let source: Parameters<typeof termsOf>[0] = originalDoc?.paymentTerms ? originalDoc : null
+  if (!source) {
+    const customerId = typeof data.customer === 'object' ? data.customer?.id : data.customer
+    source = customerId
+      ? await req.payload
+          .findByID({ collection: 'customers', id: customerId, depth: 0, overrideAccess: true, req })
+          .catch(() => null)
+      : null
+  }
+  const terms = termsOf(source)
 
   const deliveredAt = new Date()
   data.deliveredAt = deliveredAt.toISOString()
-  data.dueDate = addDays(deliveredAt, customer?.creditDays ?? 15).toISOString()
+  if (terms.kind === 'on-delivery') data.dueDate = deliveredAt.toISOString()
+  if (terms.kind === 'credit') data.dueDate = addDays(deliveredAt, terms.days).toISOString()
+  if (terms.kind === 'prepaid') data.dueDate = originalDoc?.dueDate ?? originalDoc?.invoiceValidUntil
   return data
 }
 

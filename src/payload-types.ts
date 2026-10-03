@@ -1135,7 +1135,7 @@ export interface Order {
   id: number;
   orderNumber?: string | null;
   /**
-   * Moves forward only. Priced, Invoiced, Expired and Paid are set automatically; you can set Delivered (within the invoice’s 7-day validity) or Cancelled (after invoicing, a credit note is added to the ledger).
+   * Moves forward only. Priced, Invoiced, Expired and Paid are set automatically; you can set Delivered (within the invoice’s 7-day validity) or Cancelled (after delivery, a credit note is added to the ledger). A super admin can also set a delivered order to Paid, which records the outstanding amount as a payment.
    */
   status: 'submitted' | 'priced' | 'invoiced' | 'delivered' | 'paid' | 'cancelled' | 'expired';
   customer: number | Customer;
@@ -1159,9 +1159,14 @@ export interface Order {
    * 7 days after the invoice is issued. Deliver before then.
    */
   invoiceValidUntil?: string | null;
+  /**
+   * The customer’s terms when the invoice was issued.
+   */
+  paymentTerms?: ('prepaid' | 'on-delivery' | 'credit') | null;
+  creditDays?: number | null;
   deliveredAt?: string | null;
   /**
-   * Set on delivery: delivered at + the customer's payment terms.
+   * Pay before delivery: the end of the invoice’s validity. Pay on delivery: the delivery date. Credit: delivery date + credit days.
    */
   dueDate?: string | null;
   updatedAt: string;
@@ -1184,7 +1189,11 @@ export interface Customer {
    */
   approved?: boolean | null;
   /**
-   * Invoice due date = invoice date + these days.
+   * Most customers pay before delivery; grant credit only to trusted accounts. Set it before or when you tick Approved: the approval email states these terms. Changing it later emails the customer; it applies to invoices issued from then on.
+   */
+  paymentTerms: 'prepaid' | 'on-delivery' | 'credit';
+  /**
+   * Payment is due this many days after delivery.
    */
   creditDays?: number | null;
   updatedAt: string;
@@ -1207,7 +1216,7 @@ export interface Customer {
   collection: 'customers';
 }
 /**
- * Invoices appear here automatically. Add a Payment when a customer pays, or a Credit note to reduce what they owe.
+ * Invoices appear here automatically when an order is delivered and can’t be edited. When a customer pays, click Create New, choose Payment received, pick the order and enter the amount received (part payments are fine). The order becomes Paid as soon as nothing is owed on it.
  *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "ledger-entries".
@@ -1215,6 +1224,9 @@ export interface Customer {
 export interface LedgerEntry {
   id: number;
   customer: number | Customer;
+  /**
+   * The order this payment is for, so its balance goes down.
+   */
   order?: (number | null) | Order;
   type: 'invoice' | 'payment' | 'credit-note';
   amount: number;
@@ -1911,6 +1923,8 @@ export interface OrdersSelect<T extends boolean = true> {
   invoiceNumber?: T;
   invoiceDate?: T;
   invoiceValidUntil?: T;
+  paymentTerms?: T;
+  creditDays?: T;
   deliveredAt?: T;
   dueDate?: T;
   updatedAt?: T;
@@ -1941,6 +1955,7 @@ export interface CustomersSelect<T extends boolean = true> {
   phone?: T;
   address?: T;
   approved?: T;
+  paymentTerms?: T;
   creditDays?: T;
   updatedAt?: T;
   createdAt?: T;
@@ -2490,7 +2505,7 @@ export interface Footer {
   createdAt?: string | null;
 }
 /**
- * Bank details printed on invoices, and who at Obimed receives order notifications.
+ * Bank details printed on invoices, staff email alerts, and the invoice footer note. Use the tabs below.
  *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "invoice-settings".
@@ -2501,7 +2516,7 @@ export interface InvoiceSetting {
   accountName?: string | null;
   accountNumber?: string | null;
   /**
-   * Who at Obimed is emailed about new registrations, quote requests and POs. Separate several addresses with commas.
+   * Separate several addresses with commas. If left empty, alerts go to sales@obimedpharmaceuticals.com.
    */
   notifyEmails?: string | null;
   notes?: string | null;

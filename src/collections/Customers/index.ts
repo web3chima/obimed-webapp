@@ -2,10 +2,19 @@ import type { CollectionConfig } from 'payload'
 
 import { APIError } from 'payload'
 
-import { notifyAccountApproved, notifyNewRegistration } from '@/notifications'
+import {
+  notifyAccountApproved,
+  notifyNewRegistration,
+  notifyPaymentTermsChanged,
+} from '@/notifications'
 
 import { isCustomerUser, hasRole, salesStaff, salesStaffField } from '../../access/roles'
 import { customerSignIn, customerSignOut } from './endpoints'
+import {
+  DEFAULT_CREDIT_DAYS,
+  paymentTermsOptions,
+  termsLabel,
+} from '../Orders/terms'
 
 // Manufacturer accounts for ordering, POs, invoices and the ledger. Separate from staff `users`.
 export const Customers: CollectionConfig<'customers'> = {
@@ -43,8 +52,12 @@ export const Customers: CollectionConfig<'customers'> = {
     afterChange: [
       async ({ doc, operation, previousDoc, req }) => {
         if (operation === 'create') await notifyNewRegistration(req.payload, doc)
+        // Approval email includes the payment terms set at that time
         else if (doc.approved && !previousDoc?.approved)
           await notifyAccountApproved(req.payload, doc)
+        // Terms changed later on an active account: tell the customer their new terms
+        else if (doc.approved && termsLabel(doc) !== termsLabel(previousDoc))
+          await notifyPaymentTermsChanged(req.payload, doc)
         return doc
       },
     ],
@@ -88,13 +101,31 @@ export const Customers: CollectionConfig<'customers'> = {
       admin: { position: 'sidebar', description: 'Only approved customers can log in.' },
     },
     {
-      name: 'creditDays',
-      label: 'Payment terms (days)',
-      type: 'number',
-      defaultValue: 15,
-      min: 0,
+      name: 'paymentTerms',
+      label: 'Payment terms',
+      type: 'select',
+      required: true,
+      defaultValue: 'prepaid',
+      options: paymentTermsOptions,
       access: { create: salesStaffField, update: salesStaffField },
-      admin: { position: 'sidebar', description: 'Invoice due date = invoice date + these days.' },
+      admin: {
+        position: 'sidebar',
+        description:
+          'Most customers pay before delivery; grant credit only to trusted accounts. Set it before or when you tick Approved: the approval email states these terms. Changing it later emails the customer; it applies to invoices issued from then on.',
+      },
+    },
+    {
+      name: 'creditDays',
+      label: 'Credit days',
+      type: 'number',
+      defaultValue: DEFAULT_CREDIT_DAYS,
+      min: 1,
+      access: { create: salesStaffField, update: salesStaffField },
+      admin: {
+        position: 'sidebar',
+        condition: (data) => data?.paymentTerms === 'credit',
+        description: 'Payment is due this many days after delivery.',
+      },
     },
   ],
   timestamps: true,

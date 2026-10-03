@@ -19,6 +19,7 @@ import {
   scheduleDueDateOnDelivery,
   settleOnDelivery,
 } from './hooks'
+import { paymentTermsOptions } from './terms'
 import { expireInvoicesEndpoint, requestQuoteEndpoint, submitPOEndpoint } from './endpoints'
 
 // Prices stay hidden from the customer until they have entered their PO number
@@ -218,6 +219,28 @@ export const Orders: CollectionConfig<'orders'> = {
       },
     },
     {
+      name: 'paymentTerms',
+      label: 'Payment terms',
+      type: 'select',
+      options: paymentTermsOptions,
+      admin: {
+        position: 'sidebar',
+        readOnly: true,
+        description: 'The customer’s terms when the invoice was issued.',
+        condition: (data) => Boolean(data?.invoiceNumber),
+      },
+    },
+    {
+      name: 'creditDays',
+      label: 'Credit days',
+      type: 'number',
+      admin: {
+        position: 'sidebar',
+        readOnly: true,
+        condition: (data) => data?.paymentTerms === 'credit',
+      },
+    },
+    {
       name: 'deliveredAt',
       label: 'Delivered at',
       type: 'date',
@@ -231,7 +254,8 @@ export const Orders: CollectionConfig<'orders'> = {
         position: 'sidebar',
         readOnly: true,
         date: { pickerAppearance: 'dayAndTime' },
-        description: "Set on delivery: delivered at + the customer's payment terms.",
+        description:
+          'Pay before delivery: the end of the invoice’s validity. Pay on delivery: the delivery date. Credit: delivery date + credit days.',
       },
     },
   ],
