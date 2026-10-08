@@ -136,8 +136,6 @@ export default async function StatementPage({ searchParams }: Args) {
             </p>
           </div>
           <dl className="grid grid-cols-[1fr_auto] content-start gap-x-6 gap-y-1 rounded-xl bg-[#f7f6fb] p-4 text-sm">
-            <dt>Opening balance</dt>
-            <dd className="text-right">{balanceText(statement.opening)}</dd>
             <dt>Invoiced</dt>
             <dd className="text-right">{formatNaira(statement.totals.debit)}</dd>
             <dt>Paid &amp; credited</dt>
@@ -166,12 +164,6 @@ export default async function StatementPage({ searchParams }: Args) {
               </tr>
             </thead>
             <tbody>
-              <tr className="bg-[#f7f6fb]">
-                <td className="px-3 py-2" colSpan={6}>
-                  Opening balance
-                </td>
-                <td className="px-3 py-2 text-right">{balanceText(statement.opening)}</td>
-              </tr>
               {statement.rows.length === 0 ? (
                 <tr>
                   <td className="px-3 py-6 text-center text-[#66666b]" colSpan={7}>

@@ -33,7 +33,6 @@ export async function GET(request: Request) {
     ['Period', `${statement.from ?? 'Start of account'} to ${statement.to ?? 'today'}`],
     [],
     ['Date', 'Details', 'Order', 'Reference', 'PO number', 'Invoiced (NGN)', 'Paid (NGN)', 'Balance (NGN)'],
-    ['', 'Opening balance', '', '', '', '', '', statement.opening],
     ...statement.rows.map((row) => [
       lagosDay(row.date),
       row.description,
