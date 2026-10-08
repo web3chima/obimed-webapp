@@ -1,6 +1,6 @@
 import type { Payload } from 'payload'
 
-import type { Customer, Order } from '@/payload-types'
+import type { Customer, LedgerEntry, Order } from '@/payload-types'
 
 import { orderAccount } from '@/collections/LedgerEntries/balance'
 import {
@@ -385,4 +385,30 @@ export const notifyPaymentReceived = async (
       `Your outstanding balance is now ${formatNaira(balance)}.`,
     ],
     action: { label: 'View your account', url: `${site()}/account` },
+  })
+
+export const notifyGoodsReturned = async (
+  payload: Payload,
+  customer: Customer,
+  order: Order,
+  entry: LedgerEntry,
+  refunded: number,
+  balance: number,
+) =>
+  sendNotification(payload, {
+    to: customer.email,
+    from: 'accounts',
+    subject: `Credit note ${entry.reference}: goods returned on ${order.invoiceNumber}`,
+    heading: 'Credit note for returned goods',
+    lines: [
+      `We have received ${entry.note?.replace(/ returned.*$/, '') ?? 'your returned goods'} from order ${order.orderNumber} (PO ${order.poNumber}).`,
+      `Credit note ${entry.reference} for ${formatNaira(entry.amount)} has been added to your account against invoice ${order.invoiceNumber}.`,
+      refunded > 0
+        ? `${formatNaira(refunded)} of this is being refunded to you${refunded < entry.amount ? '; the rest reduces what you owe' : ''}.`
+        : balance < 0
+          ? `This is kept as credit on your account (${formatNaira(-balance)} in total) and can be used against a future invoice.`
+          : 'This reduces the amount you owe.',
+      `Your account balance is now ${balance < 0 ? `${formatNaira(-balance)} in credit` : formatNaira(balance)}.`,
+    ],
+    action: { label: 'View your statement', url: `${site()}/account/statement` },
   })

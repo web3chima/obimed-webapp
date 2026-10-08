@@ -13,6 +13,7 @@ import { getPayload } from 'payload'
 
 import config from '@payload-config'
 
+import { orderBalance } from '@/collections/LedgerEntries/balance'
 import { formatNaira } from '@/utilities/format'
 
 if (process.env.SMTP_HOST) {
@@ -753,6 +754,71 @@ try {
   const repaid = await payload.findByID({ collection: 'orders', id: orderId, overrideAccess: true })
   check('correcting it back marks the order paid again', repaid.status === 'paid', repaid.status)
 
+  // 10a2. Returned bags: a credit note at the invoiced price, kept as credit or refunded
+  const productOf = (item: (typeof priced.items)[number]) =>
+    typeof item.product === 'object' ? item.product.id : item.product
+  const returnEntry = (product: number, bags: number, settlement: 'credit' | 'refund', order = orderId) =>
+    request('/api/ledger-entries', {
+      method: 'POST',
+      body: JSON.stringify({
+        customer: aId,
+        order,
+        type: 'return',
+        product,
+        bags,
+        settlement,
+        date: new Date().toISOString(),
+      }),
+      cookie: salesCookie,
+    })
+  const firstReturn = await returnEntry(productOf(priced.items[0]!), 2, 'credit')
+  const afterReturn = await payload.findByID({ collection: 'orders', id: orderId, overrideAccess: true })
+  check(
+    'returned bags become a credit note at the invoiced price; the order stays paid',
+    firstReturn.status === 201 &&
+      firstReturn.body?.doc?.amount === 2 * 15000 &&
+      firstReturn.body?.doc?.reference === `CN-${invoiceNumber}` &&
+      afterReturn.status === 'paid' &&
+      (await orderBalance(payload, orderId)) === -30000,
+    `status ${firstReturn.status}, amount ${firstReturn.body?.doc?.amount}, ${afterReturn.status}`,
+  )
+  const tooMany = await returnEntry(productOf(priced.items[0]!), 9, 'credit')
+  check(
+    'cannot return more bags than were delivered',
+    tooMany.status === 400 && String(tooMany.text).includes('Only 8 more'),
+    `status ${tooMany.status}`,
+  )
+  const refundReturn = await returnEntry(productOf(priced.items[1]!), 1, 'refund')
+  const refunds = await payload.find({
+    collection: 'ledger-entries',
+    where: { and: [{ order: { equals: orderId } }, { type: { equals: 'refund' } }] },
+    overrideAccess: true,
+  })
+  check(
+    'choosing refund records the money paid back',
+    refundReturn.status === 201 &&
+      refunds.totalDocs === 1 &&
+      refunds.docs[0]?.amount === 42000.5 &&
+      (await orderBalance(payload, orderId)) === -30000,
+    `status ${refundReturn.status}, ${refunds.totalDocs} refund(s)`,
+  )
+  const returnStatement = await request('/account/statement', { cookie })
+  check(
+    'statement shows the returned goods and the refund',
+    returnStatement.text.includes('Credit note (goods returned)') &&
+      returnStatement.text.includes('Refund paid'),
+  )
+  await request(`/api/ledger-entries/${refundReturn.body?.doc?.id}`, {
+    method: 'DELETE',
+    cookie: salesCookie,
+  })
+  const refundsAfterDelete = await payload.count({
+    collection: 'ledger-entries',
+    where: { and: [{ order: { equals: orderId } }, { type: { equals: 'refund' } }] },
+    overrideAccess: true,
+  })
+  check('deleting a return also removes its refund', refundsAfterDelete.totalDocs === 0)
+
   // 10b. Cancelling before delivery: nothing was owed, so the ledger is untouched
   const second = await request('/api/orders/request', {
     method: 'POST',
@@ -1045,6 +1111,27 @@ try {
     id: prepaidId,
     overrideAccess: true,
   })
+  const refundUnpaid = await request('/api/ledger-entries', {
+    method: 'POST',
+    body: JSON.stringify({
+      customer: customerB.id,
+      order: prepaidId,
+      type: 'return',
+      product:
+        typeof prepaidDoc.items[0]!.product === 'object'
+          ? prepaidDoc.items[0]!.product.id
+          : prepaidDoc.items[0]!.product,
+      bags: 1,
+      settlement: 'refund',
+      date: new Date().toISOString(),
+    }),
+    cookie: salesCookie,
+  })
+  check(
+    'refund refused when nothing has been paid on the order',
+    refundUnpaid.status === 400,
+    `status ${refundUnpaid.status}`,
+  )
   check(
     'changing terms leaves issued invoices on their original terms',
     prepaidAfterTermsChange.paymentTerms === 'prepaid',
@@ -1135,6 +1222,7 @@ try {
     ['customer told account approved', 'Your Obimed account is approved'],
     ['customer told new payment terms', 'Your payment terms with Obimed'],
     ['customer sent password reset link', 'Reset your Obimed password'],
+    ['customer sent credit note for returned goods', `Credit note CN-${invoiceNumber}`],
     ['staff told about quote request', `New quote request ${orderNumber}`],
     ['customer told request received', `We received your quote request ${orderNumber}`],
     ['customer told order priced', `Your order ${orderNumber} is priced`],

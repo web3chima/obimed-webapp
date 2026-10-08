@@ -7,7 +7,7 @@ import { getPayload } from 'payload'
 import React from 'react'
 import { ChevronLeftIcon, FileTextIcon } from 'lucide-react'
 
-import { orderAccount } from '@/collections/LedgerEntries/balance'
+import { ledgerTypeLabels, orderAccount } from '@/collections/LedgerEntries/balance'
 import { dueInWords, termsOf } from '@/collections/Orders/terms'
 import { OrderStatus } from '@/components/Account/OrderStatus'
 import { OrderTimeline } from '@/components/Account/OrderTimeline'
@@ -108,23 +108,28 @@ export default async function OrderPage({ params }: Args) {
 
       {account && account.received.length > 0 && (
         <div className="mb-8 rounded-2xl border border-border bg-card p-6">
-          <h2 className="mb-3 font-heading font-bold text-heading">Payments</h2>
+          <h2 className="mb-3 font-heading font-bold text-heading">Payments &amp; credit notes</h2>
           <ul className="divide-y divide-border text-sm">
             {account.received.map((entry) => (
               <li className="flex justify-between gap-4 py-2" key={entry.id}>
                 <span>
-                  {formatDate(entry.date)} ·{' '}
-                  {entry.type === 'payment' ? 'Payment received' : 'Credit note'}
+                  {formatDate(entry.date)} · {ledgerTypeLabels[entry.type]}
                   {entry.reference && ` (${entry.reference})`}
+                  {entry.type === 'return' && entry.note && (
+                    <span className="block text-xs text-muted-foreground">{entry.note}</span>
+                  )}
                 </span>
-                <span className="font-semibold">{formatNaira(entry.amount)}</span>
+                <span className="font-semibold">
+                  {entry.type === 'refund' ? '− ' : ''}
+                  {formatNaira(entry.amount)}
+                </span>
               </li>
             ))}
           </ul>
           <dl className="mt-3 grid grid-cols-[1fr_auto] gap-x-4 gap-y-1 border-t border-border pt-3 text-sm">
             <dt>Invoice total</dt>
             <dd className="text-right">{formatNaira(order.total)}</dd>
-            <dt>Paid</dt>
+            <dt>Paid &amp; credited</dt>
             <dd className="text-right">{formatNaira(account.paid)}</dd>
             <dt className="font-heading font-bold">
               {owedNow ? 'Balance due' : 'Balance due on delivery'}

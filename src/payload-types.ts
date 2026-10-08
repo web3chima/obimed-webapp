@@ -1216,7 +1216,7 @@ export interface Customer {
   collection: 'customers';
 }
 /**
- * Invoices appear here automatically when an order is delivered and can’t be edited. When a customer pays, click Create New, choose Payment received, pick the order and enter the amount received (part payments are fine). The order becomes Paid as soon as nothing is owed on it.
+ * Invoices appear here automatically when an order is delivered and can’t be edited. When a customer pays, click Create New, choose Payment received, pick the order and enter the amount received (part payments are fine); the order becomes Paid as soon as nothing is owed on it. If bags come back, choose Credit note (goods returned), pick the order, product and number of bags: the value is worked out from the invoice price.
  *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "ledger-entries".
@@ -1228,9 +1228,19 @@ export interface LedgerEntry {
    * The order this payment is for, so its balance goes down.
    */
   order?: (number | null) | Order;
-  type: 'invoice' | 'payment' | 'credit-note';
+  type: 'invoice' | 'payment' | 'credit-note' | 'return' | 'refund';
+  /**
+   * For goods returned, leave empty: it is worked out from the invoice price.
+   */
   amount: number;
   date: string;
+  product?: (number | null) | Product;
+  bags?: number | null;
+  /**
+   * Refund only applies to money already paid on this order; anything else reduces what they owe.
+   */
+  settlement?: ('credit' | 'refund') | null;
+  returnOf?: (number | null) | LedgerEntry;
   /**
    * Invoice number, bank reference, etc.
    */
@@ -1940,6 +1950,10 @@ export interface LedgerEntriesSelect<T extends boolean = true> {
   type?: T;
   amount?: T;
   date?: T;
+  product?: T;
+  bags?: T;
+  settlement?: T;
+  returnOf?: T;
   reference?: T;
   note?: T;
   updatedAt?: T;

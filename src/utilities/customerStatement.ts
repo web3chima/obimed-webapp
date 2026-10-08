@@ -2,7 +2,7 @@ import type { Payload } from 'payload'
 
 import type { Customer, LedgerEntry, Order } from '@/payload-types'
 
-import { signedAmount } from '@/collections/LedgerEntries/balance'
+import { ledgerTypeLabels, signedAmount } from '@/collections/LedgerEntries/balance'
 
 export type StatementRow = {
   id: number
@@ -30,12 +30,6 @@ export type StatementOrder = Pick<
   | 'status'
   | 'createdAt'
 >
-
-const typeLabels: Record<LedgerEntry['type'], string> = {
-  invoice: 'Invoice',
-  payment: 'Payment received',
-  'credit-note': 'Credit note',
-}
 
 // "2026-10-01" → start of that day in Lagos (UTC+1), so ranges match the dates customers see
 const lagosDayStart = (day: string) => new Date(`${day}T00:00:00+01:00`)
@@ -111,7 +105,9 @@ export const buildStatement = async (
       id: entry.id,
       date: entry.date,
       type: entry.type,
-      description: entry.note ? `${typeLabels[entry.type]}: ${entry.note}` : typeLabels[entry.type],
+      description: entry.note
+        ? `${ledgerTypeLabels[entry.type]}: ${entry.note}`
+        : ledgerTypeLabels[entry.type],
       reference: entry.reference || '',
       orderNumber: order?.orderNumber || '',
       poNumber: order?.poNumber || '',

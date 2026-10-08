@@ -2,9 +2,18 @@ import type { Payload, PayloadRequest, Where } from 'payload'
 
 import type { LedgerEntry } from '@/payload-types'
 
-// Invoices add to what is owed; payments and credit notes reduce it
+// Invoices (and refunds paid back to the customer) add to what is owed; payments, credit notes
+// and returned goods reduce it
 export const signedAmount = (entry: Pick<LedgerEntry, 'type' | 'amount'>) =>
-  entry.type === 'invoice' ? entry.amount : -entry.amount
+  entry.type === 'invoice' || entry.type === 'refund' ? entry.amount : -entry.amount
+
+export const ledgerTypeLabels: Record<LedgerEntry['type'], string> = {
+  invoice: 'Invoice',
+  payment: 'Payment received',
+  'credit-note': 'Credit note',
+  return: 'Credit note (goods returned)',
+  refund: 'Refund paid',
+}
 
 const sumEntries = async (payload: Payload, where: Where, req?: PayloadRequest) => {
   const { docs } = await payload.find({
@@ -25,7 +34,7 @@ export const customerBalance = (payload: Payload, customerId: number, req?: Payl
 export const orderBalance = (payload: Payload, orderId: number, req?: PayloadRequest) =>
   sumEntries(payload, { order: { equals: orderId } }, req)
 
-// What has been paid or credited on an order, and what is still owed on it (once delivered)
+// What has been paid or credited on an order (net of refunds), and what is still owed on it
 export const orderAccount = async (payload: Payload, orderId: number, req?: PayloadRequest) => {
   const { docs } = await payload.find({
     collection: 'ledger-entries',
@@ -38,7 +47,7 @@ export const orderAccount = async (payload: Payload, orderId: number, req?: Payl
     req,
   })
   const received = docs.filter((entry) => entry.type !== 'invoice')
-  const paid = Math.round(received.reduce((total, entry) => total + entry.amount, 0) * 100) / 100
-  const owed = docs.filter((entry) => entry.type === 'invoice').reduce((t, e) => t + e.amount, 0)
-  return { received, paid, balance: Math.round((owed - paid) * 100) / 100 }
+  const paid = Math.round(-received.reduce((total, entry) => total + signedAmount(entry), 0) * 100) / 100
+  const balance = Math.round(docs.reduce((total, entry) => total + signedAmount(entry), 0) * 100) / 100
+  return { received, paid, balance }
 }

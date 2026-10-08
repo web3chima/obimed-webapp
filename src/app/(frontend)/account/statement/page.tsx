@@ -136,9 +136,9 @@ export default async function StatementPage({ searchParams }: Args) {
             </p>
           </div>
           <dl className="grid grid-cols-[1fr_auto] content-start gap-x-6 gap-y-1 rounded-xl bg-[#f7f6fb] p-4 text-sm">
-            <dt>Invoiced</dt>
+            <dt>Invoices &amp; refunds</dt>
             <dd className="text-right">{formatNaira(statement.totals.debit)}</dd>
-            <dt>Paid &amp; credited</dt>
+            <dt>Payments &amp; credit notes</dt>
             <dd className="text-right">− {formatNaira(statement.totals.credit)}</dd>
             <dt className="border-t border-[#e4e1ef] pt-2 font-heading font-bold text-[#2f2566]">
               {statement.closing < 0 ? 'Credit on account' : 'Balance due'}
@@ -158,8 +158,8 @@ export default async function StatementPage({ searchParams }: Args) {
                 <th className="px-3 py-2 font-heading font-semibold">Details</th>
                 <th className="px-3 py-2 font-heading font-semibold">Reference</th>
                 <th className="px-3 py-2 font-heading font-semibold">PO no.</th>
-                <th className="px-3 py-2 text-right font-heading font-semibold">Invoiced</th>
-                <th className="px-3 py-2 text-right font-heading font-semibold">Paid</th>
+                <th className="px-3 py-2 text-right font-heading font-semibold">Debit</th>
+                <th className="px-3 py-2 text-right font-heading font-semibold">Credit</th>
                 <th className="px-3 py-2 text-right font-heading font-semibold">Balance</th>
               </tr>
             </thead>
@@ -259,7 +259,8 @@ export default async function StatementPage({ searchParams }: Args) {
 
         <p className="mt-10 border-t border-[#e4e1ef] pt-4 text-xs leading-relaxed text-[#66666b]">
           Invoices are recorded when goods are delivered. Payments made before delivery appear as
-          credit until the invoice is recorded. Please contact {siteConfig.emails.accounts} if
+          credit until the invoice is recorded. Returned goods appear as credit notes at the
+          invoiced price; refunds paid back to you appear as debits. Please contact {siteConfig.emails.accounts} if
           anything on this statement looks wrong.
         </p>
       </article>
