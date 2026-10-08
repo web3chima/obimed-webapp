@@ -78,8 +78,8 @@ export const NextStep: React.FC = () => {
       paid === null
         ? 'Checking payments…'
         : unpaid
-          ? `⚠ Not fully paid: ${naira(paid)} of ${naira(total)} received. This customer pays before delivery; check Sales → Ledger before you deliver.`
-          : `Paid in full (${naira(paid)}). You can deliver now.`
+          ? `⚠ Not fully paid: ${naira(paid)} of ${naira(total)} received. This customer pays before delivery; record payments in “Payments & credit notes” below before you deliver.`
+          : `Paid in full (${naira(paid)}). Deliver now: when you set Status to Delivered it becomes Paid automatically.`
     } When the goods are delivered, set Status to Delivered and Save. If it is neither delivered nor paid within 7 days it expires automatically.`
   } else if (status === 'invoiced') {
     title = `Invoiced${invoiceNumber ? ` (${invoiceNumber})` : ''}: deliver by ${validText}`
@@ -88,7 +88,7 @@ export const NextStep: React.FC = () => {
   } else if (status === 'delivered') {
     title = 'Delivered: awaiting payment'
     text =
-      'Payment is due by the date in “Payment due” (right). When money arrives, go to Sales → Ledger → Create New, choose Type “Payment received”, pick this order and enter the amount received. Part payments reduce the balance; the order becomes Paid as soon as nothing is owed. Don’t edit the order’s Invoice entry in the ledger. A super admin can also set Status to Paid here, which records the outstanding amount as a payment. If bags come back, record them in Sales → Ledger as “Credit note (goods returned)”.'
+      'Payment is due by the date in “Payment due” (right). When money arrives, scroll to “Payments & credit notes” below, click Add new, choose Type “Payment received” and enter the amount. Part payments reduce the balance; the order becomes Paid as soon as nothing is owed. Don’t edit the order’s Invoice entry in the ledger. A super admin can also set Status to Paid here, which records the outstanding amount as a payment. If bags come back, add a “Credit note (goods returned)” there too.'
   } else if (status === 'expired') {
     title = 'Invoice expired'
     text =
@@ -96,7 +96,7 @@ export const NextStep: React.FC = () => {
   } else if (status === 'paid') {
     title = 'Complete'
     text =
-      'This order is paid in full. If bags come back, record them in Sales → Ledger → Create New as “Credit note (goods returned)”: choose keep as credit or refund. If a payment is corrected so money is owed again, it goes back to Delivered by itself.'
+      'This order is paid in full. If bags come back, add a “Credit note (goods returned)” in “Payments & credit notes” below: choose keep as credit or refund. If a payment is corrected so money is owed again, it goes back to Delivered by itself.'
   } else {
     title = 'Cancelled'
     text = 'This order was cancelled.'

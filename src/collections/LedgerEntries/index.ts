@@ -2,6 +2,7 @@ import type { CollectionConfig } from 'payload'
 
 import { salesStaff, salesOrOwnCustomer } from '../../access/roles'
 import {
+  fillCustomerFromOrder,
   lockedOnInvoices,
   priceReturnedGoods,
   refundReturnedGoods,
@@ -33,6 +34,7 @@ export const LedgerEntries: CollectionConfig<'ledger-entries'> = {
   },
   defaultSort: '-date',
   hooks: {
+    beforeValidate: [fillCustomerFromOrder],
     beforeChange: [priceReturnedGoods, protectLedgerEntries],
     afterChange: [settleOrder, refundReturnedGoods],
     beforeDelete: [preventInvoiceDelete, removeRefundWithReturn],
@@ -46,8 +48,8 @@ export const LedgerEntries: CollectionConfig<'ledger-entries'> = {
           name: 'customer',
           type: 'relationship',
           relationTo: 'customers',
-          required: true,
           access: { update: lockedOnInvoices },
+          admin: { description: 'Filled in from the order if you leave it empty.' },
         },
         {
           name: 'order',

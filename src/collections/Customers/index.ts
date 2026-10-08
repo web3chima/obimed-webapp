@@ -2,6 +2,8 @@ import type { CollectionConfig } from 'payload'
 
 import { APIError } from 'payload'
 
+import { customerBalance } from '../LedgerEntries/balance'
+
 import {
   notifyAccountApproved,
   notifyNewRegistration,
@@ -137,6 +139,39 @@ export const Customers: CollectionConfig<'customers'> = {
         position: 'sidebar',
         condition: (data) => data?.paymentTerms === 'credit',
         description: 'Payment is due this many days after delivery.',
+      },
+    },
+    {
+      name: 'balance',
+      label: 'Account balance (₦)',
+      type: 'number',
+      virtual: true,
+      admin: {
+        position: 'sidebar',
+        readOnly: true,
+        description: 'What they owe across all delivered orders (negative = credit on account).',
+      },
+      hooks: {
+        afterRead: [
+          async ({ data, req }) =>
+            data?.id && hasRole(req.user, 'sales')
+              ? customerBalance(req.payload, data.id as number, req)
+              : undefined,
+        ],
+      },
+    },
+    {
+      name: 'ledger',
+      label: 'Ledger',
+      type: 'join',
+      collection: 'ledger-entries',
+      on: 'customer',
+      defaultSort: '-date',
+      admin: {
+        description:
+          'Every invoice, payment, credit note and refund for this customer. Use “Add new” to record a payment (choose the order it is for).',
+        defaultColumns: ['date', 'type', 'amount', 'order', 'reference'],
+        condition: (data) => Boolean(data?.id),
       },
     },
   ],

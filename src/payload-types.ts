@@ -90,6 +90,12 @@ export interface Config {
     'payload-migrations': PayloadMigration;
   };
   collectionsJoins: {
+    orders: {
+      ledger: 'ledger-entries';
+    };
+    customers: {
+      ledger: 'ledger-entries';
+    };
     'payload-folders': {
       documentsAndFolders: 'payload-folders' | 'media';
     };
@@ -1150,6 +1156,14 @@ export interface Order {
   total?: number | null;
   notes?: string | null;
   /**
+   * This order’s ledger. To record money received or returned bags, click “Add new”: the order and customer are filled in, choose the Type and enter the amount (or bags).
+   */
+  ledger?: {
+    docs?: (number | LedgerEntry)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
+  /**
    * Entered by the customer after pricing. If they sent it to you, type it here and Save to issue the invoice. Fixed once invoiced.
    */
   poNumber?: string | null;
@@ -1196,6 +1210,18 @@ export interface Customer {
    * Payment is due this many days after delivery.
    */
   creditDays?: number | null;
+  /**
+   * What they owe across all delivered orders (negative = credit on account).
+   */
+  balance?: number | null;
+  /**
+   * Every invoice, payment, credit note and refund for this customer. Use “Add new” to record a payment (choose the order it is for).
+   */
+  ledger?: {
+    docs?: (number | LedgerEntry)[];
+    hasNextPage?: boolean;
+    totalDocs?: number;
+  };
   updatedAt: string;
   createdAt: string;
   email: string;
@@ -1223,7 +1249,10 @@ export interface Customer {
  */
 export interface LedgerEntry {
   id: number;
-  customer: number | Customer;
+  /**
+   * Filled in from the order if you leave it empty.
+   */
+  customer?: (number | null) | Customer;
   /**
    * The order this payment is for, so its balance goes down.
    */
@@ -1929,6 +1958,7 @@ export interface OrdersSelect<T extends boolean = true> {
   deliveryLocation?: T;
   total?: T;
   notes?: T;
+  ledger?: T;
   poNumber?: T;
   invoiceNumber?: T;
   invoiceDate?: T;
@@ -1971,6 +2001,8 @@ export interface CustomersSelect<T extends boolean = true> {
   approved?: T;
   paymentTerms?: T;
   creditDays?: T;
+  balance?: T;
+  ledger?: T;
   updatedAt?: T;
   createdAt?: T;
   email?: T;

@@ -246,7 +246,9 @@ export const enforceOrderRules: CollectionBeforeChangeHook<Order> = async ({
   const after = data.status ?? before
   if (after !== before) {
     if (after === 'paid' && before === 'invoiced') {
-      reject('Set the order to Delivered first; it can be marked Paid after delivery.')
+      reject(
+        'Leave the status as Invoiced and record the money in “Payments & credit notes” on this order (Add new → Payment received). When you deliver and set it to Delivered, it becomes Paid automatically if fully paid.',
+      )
     }
     if (!allowedNext[before].includes(after)) {
       reject(`An order can't go from "${before}" to "${after}".`)

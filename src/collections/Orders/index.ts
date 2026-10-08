@@ -185,6 +185,20 @@ export const Orders: CollectionConfig<'orders'> = {
       type: 'textarea',
     },
     {
+      name: 'ledger',
+      label: 'Payments & credit notes',
+      type: 'join',
+      collection: 'ledger-entries',
+      on: 'order',
+      defaultSort: 'date',
+      admin: {
+        description:
+          'This order’s ledger. To record money received or returned bags, click “Add new”: the order and customer are filled in, choose the Type and enter the amount (or bags).',
+        defaultColumns: ['date', 'type', 'amount', 'reference', 'note'],
+        condition: (data) => Boolean(data?.invoiceNumber),
+      },
+    },
+    {
       name: 'poNumber',
       label: 'PO / LPO number',
       type: 'text',

@@ -21,6 +21,9 @@ if (process.env.SMTP_HOST) {
   process.exit(1)
 }
 
+const idOfDoc = (value: unknown) =>
+  value && typeof value === 'object' ? (value as { id: number }).id : value
+
 const BASE = process.env.TEST_BASE_URL || 'http://localhost:3000'
 const payload = await getPayload({ config })
 
@@ -1131,6 +1134,62 @@ try {
     'refund refused when nothing has been paid on the order',
     refundUnpaid.status === 400,
     `status ${refundUnpaid.status}`,
+  )
+  // A credit note for returned bags, then the payment for the rest, entered from the order
+  // (order only: the customer is filled in from it)
+  const prepaidProduct =
+    typeof prepaidDoc.items[0]!.product === 'object'
+      ? prepaidDoc.items[0]!.product.id
+      : prepaidDoc.items[0]!.product
+  const returnB = await request('/api/ledger-entries', {
+    method: 'POST',
+    body: JSON.stringify({
+      order: prepaidId,
+      type: 'return',
+      product: prepaidProduct,
+      bags: 1,
+      settlement: 'credit',
+      date: new Date().toISOString(),
+    }),
+    cookie: salesCookie,
+  })
+  const paymentAfterReturn = await request('/api/ledger-entries', {
+    method: 'POST',
+    body: JSON.stringify({
+      order: prepaidId,
+      type: 'payment',
+      amount: 10000,
+      date: new Date().toISOString(),
+      reference: 'TRF-B1',
+    }),
+    cookie: salesCookie,
+  })
+  const prepaidSettled = await payload.findByID({
+    collection: 'orders',
+    id: prepaidId,
+    overrideAccess: true,
+  })
+  check(
+    'after a credit note, the rest can be paid from the order (customer filled in)',
+    returnB.status === 201 &&
+      paymentAfterReturn.status === 201 &&
+      idOfDoc(paymentAfterReturn.body?.doc?.customer) === customerB.id &&
+      prepaidSettled.status === 'paid',
+    `return ${returnB.status}, payment ${paymentAfterReturn.status} ${paymentAfterReturn.text.slice(0, 120)}, ${prepaidSettled.status}`,
+  )
+  const orderWithLedger = await request(`/api/orders/${prepaidId}?depth=0`, { cookie: salesCookie })
+  check(
+    'the order shows its payments & credit notes',
+    orderWithLedger.body?.ledger?.docs?.length === 3,
+    `${orderWithLedger.body?.ledger?.docs?.length} entries`,
+  )
+  const customerWithLedger = await request(`/api/customers/${customerB.id}?depth=0`, {
+    cookie: salesCookie,
+  })
+  check(
+    'the customer shows their ledger and balance',
+    customerWithLedger.body?.ledger?.docs?.length >= 3 && customerWithLedger.body?.balance === 0,
+    `${customerWithLedger.body?.ledger?.docs?.length} entries, balance ${customerWithLedger.body?.balance}`,
   )
   check(
     'changing terms leaves issued invoices on their original terms',

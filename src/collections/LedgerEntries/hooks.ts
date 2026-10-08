@@ -1,4 +1,5 @@
 import type {
+  CollectionBeforeValidateHook,
   CollectionAfterChangeHook,
   CollectionAfterDeleteHook,
   CollectionBeforeChangeHook,
@@ -27,6 +28,25 @@ const idOf = (value: unknown) =>
 const isLocked = (doc?: Partial<LedgerEntry> | null) =>
   doc?.type === 'invoice' || doc?.type === 'return' || Boolean(doc?.returnOf)
 export const lockedOnInvoices: FieldAccess<LedgerEntry> = ({ doc }) => !isLocked(doc)
+
+// Entries added from an order (Payments & credit notes) only need the order: the customer is
+// taken from it
+export const fillCustomerFromOrder: CollectionBeforeValidateHook<LedgerEntry> = async ({
+  data,
+  originalDoc,
+  req,
+}) => {
+  if (!data) return data
+  const orderId = idOf(data.order ?? originalDoc?.order)
+  if (!idOf(data.customer ?? originalDoc?.customer) && orderId) {
+    const order = await req.payload
+      .findByID({ collection: 'orders', id: orderId, depth: 0, overrideAccess: true, req })
+      .catch(() => null)
+    if (order) data.customer = idOf(order.customer)!
+  }
+  if (!idOf(data.customer ?? originalDoc?.customer)) reject('Choose the customer or the order.')
+  return data
+}
 
 // Invoices are only ever added by the system, and an entry's customer must match its order
 export const protectLedgerEntries: CollectionBeforeChangeHook<LedgerEntry> = async ({
