@@ -45,9 +45,15 @@ export default async function AccountPage() {
             {customer.name} · {customer.email}
           </p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
           <Button asChild>
             <Link href="/products">New quote request</Link>
+          </Button>
+          <Button asChild variant="outline">
+            <Link href="/account/statement">
+              <FileTextIcon />
+              Statement
+            </Link>
           </Button>
           <LogoutButton />
         </div>

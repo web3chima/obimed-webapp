@@ -91,6 +91,12 @@ export const LoginForm: React.FC = () => {
         type="password"
         value={password}
       />
+      <Link
+        className="-mt-2 justify-self-end text-sm font-semibold text-primary hover:underline"
+        href="/account/forgot-password"
+      >
+        Forgot password?
+      </Link>
       {error && (
         <p className="text-sm font-semibold text-destructive" role="alert">
           {error}
@@ -105,6 +111,162 @@ export const LoginForm: React.FC = () => {
           Create an account
         </Link>
       </p>
+    </form>
+  )
+}
+
+export const ForgotPasswordForm: React.FC = () => {
+  const [email, setEmail] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [sent, setSent] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setBusy(true)
+    setError(null)
+    const res = await fetch('/api/customers/password/forgot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    })
+    setBusy(false)
+    if (!res.ok) {
+      setError(await errorMessage(res, 'Something went wrong. Please try again.'))
+      return
+    }
+    setSent((await res.json()).message)
+  }
+
+  if (sent) {
+    return (
+      <div className="grid gap-4">
+        <p className="rounded-xl border border-border bg-card px-5 py-4" role="status">
+          {sent}
+        </p>
+        <p className="text-sm text-muted-foreground">
+          No email after a few minutes? Check your spam folder, or contact us on WhatsApp.
+        </p>
+        <Link className="text-sm font-semibold text-primary hover:underline" href="/account/login">
+          Back to sign in
+        </Link>
+      </div>
+    )
+  }
+
+  return (
+    <form className="grid gap-4" onSubmit={submit}>
+      <p className="text-sm text-muted-foreground">
+        Enter the email you registered with and we will send you a link to choose a new password.
+      </p>
+      <Field
+        autoComplete="email"
+        id="email"
+        label="Email"
+        onChange={setEmail}
+        required
+        type="email"
+        value={email}
+      />
+      {error && (
+        <p className="text-sm font-semibold text-destructive" role="alert">
+          {error}
+        </p>
+      )}
+      <Button className="font-heading font-semibold" disabled={busy} size="lg" type="submit">
+        {busy ? 'Sending…' : 'Send reset link'}
+      </Button>
+      <Link className="text-sm font-semibold text-primary hover:underline" href="/account/login">
+        Back to sign in
+      </Link>
+    </form>
+  )
+}
+
+export const ResetPasswordForm: React.FC = () => {
+  const token = useSearchParams().get('token') || ''
+  const [password, setPassword] = useState('')
+  const [confirm, setConfirm] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [done, setDone] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setError(null)
+    if (password.length < 8) return setError('Use at least 8 characters.')
+    if (password !== confirm) return setError('The two passwords do not match.')
+    setBusy(true)
+    const res = await fetch('/api/customers/password/reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, password }),
+    })
+    setBusy(false)
+    if (!res.ok) {
+      setError(await errorMessage(res, 'This reset link has expired. Please request a new one.'))
+      return
+    }
+    setDone(true)
+  }
+
+  if (!token) {
+    return (
+      <p>
+        This reset link is incomplete.{' '}
+        <Link className="font-semibold text-primary hover:underline" href="/account/forgot-password">
+          Request a new link
+        </Link>
+      </p>
+    )
+  }
+
+  if (done) {
+    return (
+      <div className="grid gap-4">
+        <p className="rounded-xl border border-border bg-card px-5 py-4" role="status">
+          Your password has been changed. You can now sign in with your new password.
+        </p>
+        <Button asChild size="lg">
+          <Link href="/account/login">Sign in</Link>
+        </Button>
+      </div>
+    )
+  }
+
+  return (
+    <form className="grid gap-4" onSubmit={submit}>
+      <Field
+        autoComplete="new-password"
+        id="password"
+        label="New password (at least 8 characters)"
+        onChange={setPassword}
+        required
+        type="password"
+        value={password}
+      />
+      <Field
+        autoComplete="new-password"
+        id="confirm"
+        label="Confirm new password"
+        onChange={setConfirm}
+        required
+        type="password"
+        value={confirm}
+      />
+      {error && (
+        <p className="text-sm font-semibold text-destructive" role="alert">
+          {error}{' '}
+          {error.includes('expired') && (
+            <Link className="underline" href="/account/forgot-password">
+              Request a new link
+            </Link>
+          )}
+        </p>
+      )}
+      <Button className="font-heading font-semibold" disabled={busy} size="lg" type="submit">
+        {busy ? 'Saving…' : 'Set new password'}
+      </Button>
     </form>
   )
 }

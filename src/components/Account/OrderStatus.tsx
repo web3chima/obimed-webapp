@@ -4,7 +4,7 @@ import type { Order } from '@/payload-types'
 
 import { cn } from '@/utilities/ui'
 
-const labels: Record<Order['status'], string> = {
+export const orderStatusLabels: Record<Order['status'], string> = {
   submitted: 'Awaiting prices',
   priced: 'Priced — enter PO',
   invoiced: 'Invoiced',
@@ -31,6 +31,6 @@ export const OrderStatus: React.FC<{ status: Order['status'] }> = ({ status }) =
       tones[status],
     )}
   >
-    {labels[status]}
+    {orderStatusLabels[status]}
   </span>
 )

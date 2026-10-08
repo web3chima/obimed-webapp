@@ -53,3 +53,56 @@ export const customerSignOut: Endpoint = {
     return Response.json({ ok: true }, { headers: { 'Set-Cookie': sessionCookie('', 0) } })
   },
 }
+
+const GENERIC_RESET_REPLY =
+  'If an account exists for that email, we have sent a link to reset the password. Please check your inbox.'
+
+// POST /api/customers/password/forgot — emails a reset link. Always gives the same reply so it
+// doesn't reveal which emails have accounts.
+export const customerForgotPassword: Endpoint = {
+  path: '/password/forgot',
+  method: 'post',
+  handler: async (req) => {
+    const body = await readBody(req)
+    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase() : ''
+    if (!email || !email.includes('@')) {
+      return Response.json({ error: 'Enter the email you registered with.' }, { status: 400 })
+    }
+    try {
+      await req.payload.forgotPassword({ collection: 'customers', data: { email }, req })
+    } catch (err) {
+      req.payload.logger.error({ err, msg: 'Customer password reset email failed' })
+    }
+    return Response.json({ message: GENERIC_RESET_REPLY })
+  },
+}
+
+// POST /api/customers/password/reset — sets the new password from the emailed link. The customer
+// then signs in as usual (no session is started here).
+export const customerResetPassword: Endpoint = {
+  path: '/password/reset',
+  method: 'post',
+  handler: async (req) => {
+    const body = await readBody(req)
+    const token = typeof body.token === 'string' ? body.token : ''
+    const password = typeof body.password === 'string' ? body.password : ''
+    if (!token) return Response.json({ error: 'This reset link is incomplete.' }, { status: 400 })
+    if (password.length < 8) {
+      return Response.json({ error: 'Use at least 8 characters.' }, { status: 400 })
+    }
+    try {
+      await req.payload.resetPassword({
+        collection: 'customers',
+        data: { token, password },
+        overrideAccess: true,
+        req,
+      })
+      return Response.json({ ok: true })
+    } catch {
+      return Response.json(
+        { error: 'This reset link has expired or was already used. Please request a new one.' },
+        { status: 400 },
+      )
+    }
+  },
+}

@@ -1050,6 +1050,32 @@ try {
     prepaidAfterTermsChange.paymentTerms === 'prepaid',
   )
 
+  // 10f. Statement of account: page and CSV, only the customer's own records
+  const statementPage = await request('/account/statement', { cookie })
+  check(
+    'customer statement shows their invoices and PO numbers',
+    statementPage.status === 200 &&
+      statementPage.text.includes(invoiceNumber) &&
+      statementPage.text.includes('PO-12345') &&
+      !statementPage.text.includes('PO-PREPAID'),
+    `status ${statementPage.status}`,
+  )
+  const statementCSV = await request('/account/statement/csv', { cookie })
+  check(
+    'statement downloads as CSV without other customers’ records',
+    statementCSV.status === 200 &&
+      statementCSV.text.includes('PO-12345') &&
+      statementCSV.text.includes('Closing balance') &&
+      !statementCSV.text.includes('PO-PREPAID'),
+    `status ${statementCSV.status}`,
+  )
+  const anonymousCSV = await request('/account/statement/csv')
+  check(
+    'statement needs sign-in',
+    anonymousCSV.status === 401,
+    `status ${anonymousCSV.status}`,
+  )
+
   // 11. Signing out revokes the session: the old cookie no longer works
   await request('/api/customers/session', { method: 'DELETE', cookie })
   const afterSignOut = await request('/account', { cookie })
@@ -1059,12 +1085,56 @@ try {
     `status ${afterSignOut.status}`,
   )
 
+  // 11b. Forgotten password: same reply for any email; the emailed token sets a new password
+  const forgotUnknown = await request('/api/customers/password/forgot', {
+    method: 'POST',
+    body: JSON.stringify({ email: `nobody-${stamp}@example.com` }),
+  })
+  const forgotKnown = await request('/api/customers/password/forgot', {
+    method: 'POST',
+    body: JSON.stringify({ email: a.email }),
+  })
+  check(
+    'forgot password does not reveal which emails have accounts',
+    forgotUnknown.status === 200 &&
+      forgotKnown.status === 200 &&
+      forgotUnknown.body?.message === forgotKnown.body?.message,
+  )
+  const badReset = await request('/api/customers/password/reset', {
+    method: 'POST',
+    body: JSON.stringify({ token: 'not-a-real-token', password: 'NewPass-123!' }),
+  })
+  check('reset with a bad token is refused', badReset.status === 400, `status ${badReset.status}`)
+  const resetToken = await payload.forgotPassword({
+    collection: 'customers',
+    data: { email: a.email },
+    disableEmail: true,
+  })
+  const newPassword = `New-${stamp}-pw!`
+  const goodReset = await request('/api/customers/password/reset', {
+    method: 'POST',
+    body: JSON.stringify({ token: resetToken, password: newPassword }),
+  })
+  const oldLogin = await customerSignIn(a.email, a.password)
+  const newLogin = await customerSignIn(a.email, newPassword)
+  check(
+    'reset link sets a new password (old one stops working)',
+    goodReset.status === 200 && oldLogin.status === 401 && newLogin.status === 200,
+    `reset ${goodReset.status}, old ${oldLogin.status}, new ${newLogin.status}`,
+  )
+  const reused = await request('/api/customers/password/reset', {
+    method: 'POST',
+    body: JSON.stringify({ token: resetToken, password: 'Another-123!' }),
+  })
+  check('a reset link works only once', reused.status === 400, `status ${reused.status}`)
+
   // 12. Notifications at every step (wait briefly for the dev server's log to flush)
   await new Promise((resolve) => setTimeout(resolve, 1500))
   const expected: [string, string][] = [
     ['staff told about new registration', `New customer registration: ${a.company}`],
     ['customer told account approved', 'Your Obimed account is approved'],
     ['customer told new payment terms', 'Your payment terms with Obimed'],
+    ['customer sent password reset link', 'Reset your Obimed password'],
     ['staff told about quote request', `New quote request ${orderNumber}`],
     ['customer told request received', `We received your quote request ${orderNumber}`],
     ['customer told order priced', `Your order ${orderNumber} is priced`],

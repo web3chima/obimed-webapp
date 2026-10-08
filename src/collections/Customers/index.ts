@@ -6,10 +6,16 @@ import {
   notifyAccountApproved,
   notifyNewRegistration,
   notifyPaymentTermsChanged,
+  passwordResetEmailHTML,
 } from '@/notifications'
 
 import { isCustomerUser, hasRole, salesStaff, salesStaffField } from '../../access/roles'
-import { customerSignIn, customerSignOut } from './endpoints'
+import {
+  customerForgotPassword,
+  customerResetPassword,
+  customerSignIn,
+  customerSignOut,
+} from './endpoints'
 import {
   DEFAULT_CREDIT_DAYS,
   paymentTermsOptions,
@@ -24,6 +30,12 @@ export const Customers: CollectionConfig<'customers'> = {
     tokenExpiration: 60 * 60 * 24 * 7,
     maxLoginAttempts: 5,
     lockTime: 15 * 60 * 1000,
+    forgotPassword: {
+      expiration: 60 * 60 * 1000,
+      generateEmailSubject: () => 'Reset your Obimed password',
+      generateEmailHTML: (args) =>
+        passwordResetEmailHTML(args?.token ?? '', (args?.user as { name?: string })?.name),
+    },
   },
   access: {
     // Anyone can register; the account stays unapproved until staff approve it
@@ -47,7 +59,7 @@ export const Customers: CollectionConfig<'customers'> = {
     useAsTitle: 'company',
     description: 'Manufacturer accounts. Approve an account before the customer can log in.',
   },
-  endpoints: [customerSignIn, customerSignOut],
+  endpoints: [customerSignIn, customerSignOut, customerForgotPassword, customerResetPassword],
   hooks: {
     afterChange: [
       async ({ doc, operation, previousDoc, req }) => {

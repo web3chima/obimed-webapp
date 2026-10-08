@@ -39,7 +39,12 @@ const font = "'Montserrat','Segoe UI',Arial,Helvetica,sans-serif"
 const bodyFont = "'Open Sans','Segoe UI',Arial,Helvetica,sans-serif"
 
 // Table layout and inline styles so it renders the same in Gmail, Outlook and phone mail apps
-const renderHTML = ({ action, from = 'info', heading, lines }: Message) => {
+export const renderEmailHTML = ({
+  action,
+  from = 'info',
+  heading,
+  lines,
+}: Omit<Message, 'to' | 'subject'>) => {
   const site = getServerSideURL()
   const sender = senders[from]
   return `<!doctype html>
@@ -101,7 +106,7 @@ export const sendNotification = async (payload: Payload, message: Message) => {
       replyTo: sender.address,
       to,
       subject: message.subject,
-      html: renderHTML(message),
+      html: renderEmailHTML(message),
       text: renderText(message),
     })
   } catch (err) {
@@ -175,6 +180,21 @@ export const paymentTermsLines = (customer: Pick<Customer, 'paymentTerms' | 'cre
   }
   return lines
 }
+
+// Branded password-reset email for customers (sent by Payload's forgot-password flow)
+export const passwordResetEmailHTML = (token: string, name?: string | null) =>
+  renderEmailHTML({
+    heading: 'Reset your password',
+    lines: [
+      `Hello${name ? ` ${name}` : ''}, we received a request to reset the password for your Obimed customer account.`,
+      'Click the button below to choose a new password. The link works for 1 hour.',
+      'If you did not ask for this, you can ignore this email; your password stays the same.',
+    ],
+    action: {
+      label: 'Choose a new password',
+      url: `${site()}/account/reset-password?token=${encodeURIComponent(token)}`,
+    },
+  })
 
 export const notifyAccountApproved = async (payload: Payload, customer: Customer) =>
   sendNotification(payload, {

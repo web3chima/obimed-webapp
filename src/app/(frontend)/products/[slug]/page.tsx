@@ -9,9 +9,9 @@ import { ChevronRightIcon, FileDownIcon, MessageCircleIcon } from 'lucide-react'
 
 import type { Media as MediaType } from '@/payload-types'
 
-import { Media } from '@/components/Media'
 import { AddToQuoteButton } from '@/components/Products/AddToQuoteButton'
 import { categoryLabels, ProductCatalog } from '@/components/Products/ProductCatalog'
+import { ProductGallery } from '@/components/Products/ProductGallery'
 import { ProductVisual } from '@/components/Products/ProductVisual'
 import { Button } from '@/components/ui/button'
 import { getMediaUrl } from '@/utilities/getMediaUrl'
@@ -76,23 +76,13 @@ export default async function ProductPage({ params: paramsPromise }: Args) {
         </nav>
 
         <div className="grid gap-10 lg:grid-cols-2 lg:gap-16">
-          <div className="flex flex-col gap-3">
+          {images.length > 0 ? (
+            <ProductGallery images={images} title={product.title} />
+          ) : (
             <div className="group overflow-hidden rounded-2xl border border-border">
               <ProductVisual className="aspect-square" priority product={product} size="large" />
             </div>
-            {images.length > 1 && (
-              <div className="grid grid-cols-4 gap-3">
-                {images.slice(1, 5).map((image) => (
-                  <div
-                    className="relative aspect-square overflow-hidden rounded-lg border border-border bg-card"
-                    key={image.id}
-                  >
-                    <Media fill imgClassName="object-contain p-2" resource={image} />
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          )}
 
           <div>
             <p className="mb-3 font-heading text-sm font-bold uppercase tracking-[0.2em] text-brand-green-ink">
