@@ -7,7 +7,6 @@ import { getPayload } from 'payload'
 import React from 'react'
 import { ChevronLeftIcon, DownloadIcon } from 'lucide-react'
 
-import { dueInWords, termsLabel } from '@/collections/Orders/terms'
 import { orderStatusLabels } from '@/components/Account/OrderStatus'
 import { PrintButton } from '@/components/Account/PrintButton'
 import { Logo } from '@/components/Logo/Logo'
@@ -134,10 +133,6 @@ export default async function StatementPage({ searchParams }: Args) {
                   {customer.address}
                 </>
               )}
-            </p>
-            <p className="mt-2 text-sm">
-              <span className="font-semibold">Payment terms:</span> {termsLabel(customer)} (due{' '}
-              {dueInWords(customer)})
             </p>
           </div>
           <dl className="grid grid-cols-[1fr_auto] content-start gap-x-6 gap-y-1 rounded-xl bg-[#f7f6fb] p-4 text-sm">
